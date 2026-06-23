@@ -234,3 +234,27 @@
   .cm-line{grid-template-columns:1fr 1fr;grid-template-areas:'lab lab' 'inp usd'}
   .cm-line label{grid-area:lab}.cm-line input{grid-area:inp}.cm-usd{grid-area:usd}
 }
+
+/* ---------- Informe de Gestión (Estado de Resultados) ---------- */
+.g-table td{padding:8px 18px}
+.g-table thead th:last-child,.g-table td:last-child{text-align:right;width:230px}
+.g-cat{cursor:pointer}
+.g-cat:hover{background:var(--teal-soft)}
+.g-cat td:first-child{font-weight:700}
+.g-chev{color:var(--ink-faint);font-size:11px;margin-right:8px;display:inline-block}
+.g-cat:hover .g-chev{color:var(--teal)}
+.g-space td{padding:5px;border:none;background:transparent}
+.g-row-ind td:first-child{color:var(--ink-soft)}
+.g-click{cursor:pointer}
+.g-click:hover{background:#faf8fb}
+.g-tag{font-size:10px;color:var(--ink-faint);background:#f1eef3;padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:700}
+.g-formula td{font-weight:900;border-top:2px solid var(--line)}
+.g-ub td{background:#fce5cf}
+.g-un td{background:#fff2c2}
+.g-sub td{background:#f6f3f7}
+.g-res td{background:#dbe7f6;color:var(--aubergine-dark);font-size:15px}
+.g-line{display:grid;grid-template-columns:1fr 170px;align-items:center;gap:12px;padding:4px 0;border-bottom:1px solid var(--line)}
+.g-line label{font-size:13px;color:var(--ink)}
+.g-line input{text-align:right;font-family:'Roboto Mono',monospace;width:100%}
+@media print{ .g-cat .g-chev{display:none} .g-table td:last-child{width:auto} }
+@media(max-width:880px){ .g-line{grid-template-columns:1fr 110px} }

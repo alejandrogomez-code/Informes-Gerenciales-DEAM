@@ -204,3 +204,33 @@
 .conn-banner.err{background:#fcebea;border-color:#f0c4c0;color:#9a2820}
 .conn-banner code{background:rgba(0,0,0,.06);padding:1px 6px;border-radius:4px;font-family:'Roboto Mono',monospace;font-size:12px}
 @media print{.conn-banner{display:none !important}}
+
+/* ---------- Modal Capital de Trabajo ---------- */
+.modal.wide{max-width:680px}
+.mrow3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:4px}
+.mrow3 .mfield{margin-bottom:0}
+.mrow3 select,.mrow3 input{width:100%}
+.cm-help{font-size:12px;color:var(--ink-soft);background:var(--teal-soft);border-radius:6px;padding:8px 11px;margin:12px 0 4px}
+.cm-group{font-size:11px;text-transform:uppercase;letter-spacing:.6px;font-weight:900;color:var(--aubergine-dark);
+  background:#f6f3f7;padding:6px 10px;border-radius:5px;margin:14px 0 6px}
+.cm-line{display:grid;grid-template-columns:1fr 140px 110px;align-items:center;gap:10px;padding:3px 0}
+.cm-line label{font-size:13px;color:var(--ink)}
+.cm-line input{text-align:right;font-family:'Roboto Mono',monospace;width:100%}
+.cm-usd{font-family:'Roboto Mono',monospace;font-size:12.5px;color:var(--ink-soft);text-align:right}
+.cm-totals{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+.cm-trow{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px}
+.cm-trow.tot{font-weight:900}
+.cm-trow .v{font-family:'Roboto Mono',monospace;font-weight:700;margin-left:auto}
+.cm-trow .vr{font-size:12px;font-weight:700;width:84px;text-align:right}
+.cm-trow .vr.up{color:var(--ok)}.cm-trow .vr.down{color:var(--bad)}
+.cm-inds{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.cm-ind{flex:1;min-width:120px;border:1px solid var(--line);border-radius:6px;padding:9px 10px;text-align:center;position:relative;overflow:hidden}
+.cm-ind .l{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-faint);font-weight:700}
+.cm-ind .n{font-family:'Roboto Mono',monospace;font-weight:900;font-size:18px;margin:2px 0}
+.cm-ind .b{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.4px}
+.cm-ind .strip{height:4px;position:absolute;left:0;bottom:0;width:100%}
+@media(max-width:880px){
+  .mrow3{grid-template-columns:1fr}
+  .cm-line{grid-template-columns:1fr 1fr;grid-template-areas:'lab lab' 'inp usd'}
+  .cm-line label{grid-area:lab}.cm-line input{grid-area:inp}.cm-usd{grid-area:usd}
+}

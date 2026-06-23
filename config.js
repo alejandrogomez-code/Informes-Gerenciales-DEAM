@@ -6,6 +6,6 @@
    tengas Row Level Security activado (ver supabase/schema.sql).
    ===================================================================== */
 window.DEAM_CONFIG = {
-  SUPABASE_URL: "https://TU-PROYECTO.supabase.co",
-  SUPABASE_ANON_KEY: "TU-CLAVE-ANONIMA"
+  SUPABASE_URL: "https://splgmzezxzshxhykkleg.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwbGdtemV6eHpzaHhoeWtrbGVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMjExMDEsImV4cCI6MjA5Nzc5NzEwMX0.DdawHxBMWyDhNpWbEes-PP5LWDepRu76GSomDbRaTAI"
 };

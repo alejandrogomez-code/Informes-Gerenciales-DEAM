@@ -216,6 +216,125 @@ function renderCapital(){
   }).join('');
 }
 
+/* ---------- Carga / edición de cierres (ventana flotante) ---------- */
+const RUBROS=[
+ {cat:'activo_corriente',rubro:'Caja'},
+ {cat:'activo_corriente',rubro:'Bancos'},
+ {cat:'activo_corriente',rubro:'Bancos USD'},
+ {cat:'activo_corriente',rubro:'FCI'},
+ {cat:'activo_corriente',rubro:'Cheques'},
+ {cat:'activo_corriente',rubro:'Deudas a cobrar'},
+ {cat:'stock',rubro:'En depósito'},
+ {cat:'stock',rubro:'En tránsito'},
+ {cat:'pasivo',rubro:'Internacionales'},
+ {cat:'pasivo',rubro:'Bancos'},
+ {cat:'pasivo',rubro:'Bancos USD'},
+];
+const CAT_TITULO={activo_corriente:'Activo Corriente',stock:'Stock (Bienes de Cambio)',pasivo:'Pasivo — deudas (montos positivos)'};
+let capEditId=null;
+
+function openCapModal(id){
+  capEditId=id||null;
+  const c=capEditId?cierresFull.find(x=>x.id===capEditId):null;
+  // construir inputs por rubro
+  let html='',lastCat=null;
+  RUBROS.forEach((r,i)=>{
+    if(r.cat!==lastCat){ html+=`<div class="cm-group">${CAT_TITULO[r.cat]}</div>`; lastCat=r.cat; }
+    html+=`<div class="cm-line"><label>${r.rubro}</label><input type="number" id="cm-r${i}" oninput="capModalCalc()" placeholder="0"><span class="cm-usd" id="cm-u${i}">US$ —</span></div>`;
+  });
+  document.getElementById('cm-rubros').innerHTML=html;
+  document.getElementById('cap-modal-title').textContent=capEditId?'Editar cierre':'Cargar cierre';
+  document.getElementById('cm-del').style.display=capEditId?'inline-flex':'none';
+  document.getElementById('cm-fecha').value=c?c.fecha:new Date().toISOString().slice(0,10);
+  document.getElementById('cm-tipo').value=c?c.tipo:'mensual';
+  document.getElementById('cm-tc').value=c?c.tc:(cierresFull.length?cierresFull[cierresFull.length-1].tc:1430);
+  RUBROS.forEach((r,i)=>{
+    let val='';
+    if(c){ const ln=c.lineas.find(l=>l.categoria===r.cat&&l.rubro===r.rubro); if(ln) val=Math.abs(+ln.monto_ars)||''; }
+    document.getElementById('cm-r'+i).value=val;
+  });
+  capModalCalc();
+  document.getElementById('cap-modal').classList.add('show');
+}
+function closeCapModal(){ document.getElementById('cap-modal').classList.remove('show'); }
+function editCurrentCierre(){ const c=curCierre(); if(c) openCapModal(c.id); }
+
+function capModalCalc(){
+  const tc=+document.getElementById('cm-tc').value||0;
+  const fecha=document.getElementById('cm-fecha').value||'9999-12-31';
+  let actCte=0,stock=0,pasivo=0;
+  RUBROS.forEach((r,i)=>{
+    const ars=+document.getElementById('cm-r'+i).value||0, usd=tc?ars/tc:0;
+    document.getElementById('cm-u'+i).textContent=tc?fmtUSD(r.cat==='pasivo'?-usd:usd):'US$ —';
+    if(r.cat==='activo_corriente')actCte+=usd; else if(r.cat==='stock')stock+=usd; else pasivo+=usd;
+  });
+  const activo=actCte+stock, pn=activo-pasivo;
+  const prev=[...cierresFull].reverse().find(x=>x.tipo==='mensual'&&x.id!==capEditId&&x.fecha<fecha);
+  const vr=(cur,p)=> (prev&&p&&isFinite(p))?((cur-p)/Math.abs(p)):null;
+  const totRows=[
+    ['Activo Corriente',actCte, vr(actCte,prev?.totals.actCte)],
+    ['Stock',stock, vr(stock,prev?.totals.stock)],
+    ['Total Activo',activo, vr(activo,prev?.totals.activo), true],
+    ['Total Pasivo',-pasivo, vr(pasivo,prev?.totals.pasivo), true],
+    ['Patrimonio Neto',pn, vr(pn,prev?.totals.pn), true],
+  ];
+  const indDefs=[
+    ['Liquidez', pn?actCte/pn:0, INDICADORES[0].status],
+    ['Apalancamiento', pn?activo/pn:0, INDICADORES[1].status],
+    ['Endeudamiento', pn?pasivo/pn:0, INDICADORES[2].status],
+  ];
+  const varCell=v=> v==null?'<span class="vr"></span>':`<span class="vr ${v>=0?'up':'down'}">${v>=0?'▲':'▼'} ${fmtPct(Math.abs(v))}</span>`;
+  let html=totRows.map(r=>`<div class="cm-trow ${r[3]?'tot':''}"><span>${r[0]}</span><span class="v">${fmtUSD(r[1])}</span>${varCell(r[2])}</div>`).join('');
+  html+='<div class="cm-inds">'+indDefs.map(d=>{const st=d[2](d[1]);return `<div class="cm-ind"><div class="l">${d[0]}</div><div class="n">${fmtX(d[1])}</div><div class="b s-${st}" style="background:none;padding:0">${STAT_TXT[st]}</div><div class="strip r-${st}"></div></div>`;}).join('')+'</div>';
+  html+= prev?`<div style="font-size:11.5px;color:var(--ink-faint);margin-top:10px">Variación calculada contra el cierre mensual del ${prev.etiqueta}.</div>`
+             :'<div style="font-size:11.5px;color:var(--ink-faint);margin-top:10px">No hay cierre mensual anterior para comparar.</div>';
+  document.getElementById('cm-totals').innerHTML=html;
+}
+
+async function saveCapital(){
+  const fecha=document.getElementById('cm-fecha').value, tipo=document.getElementById('cm-tipo').value, tc=+document.getElementById('cm-tc').value||0;
+  if(!fecha||!tc){ alert('Completá fecha y tipo de cambio.'); return; }
+  if(!db){ alert('Conectá Supabase (config.js) para guardar.'); return; }
+  const lineas=RUBROS.map((r,i)=>{
+    const ars=+document.getElementById('cm-r'+i).value||0;
+    const signed=r.cat==='pasivo'?-Math.abs(ars):ars;
+    return {categoria:r.cat, rubro:r.rubro, orden:i, monto_ars:signed, monto_usd: tc?signed/tc:0};
+  });
+  let targetId=capEditId;
+  if(!targetId){
+    const existing=cierresFull.find(x=>x.fecha===fecha);
+    if(existing){ if(!confirm('Ya existe un cierre con esa fecha. ¿Reemplazarlo?')) return; targetId=existing.id; }
+  }
+  try{
+    if(targetId){
+      let r=await db.from('cierres').update({fecha,tipo,tipo_cambio:tc}).eq('id',targetId); if(r.error)throw r.error;
+      r=await db.from('cierre_lineas').delete().eq('cierre_id',targetId); if(r.error)throw r.error;
+      r=await db.from('cierre_lineas').insert(lineas.map(l=>({...l,cierre_id:targetId}))); if(r.error)throw r.error;
+    }else{
+      const c=await db.from('cierres').insert({fecha,tipo,tipo_cambio:tc}).select('id').single(); if(c.error)throw c.error;
+      const r=await db.from('cierre_lineas').insert(lineas.map(l=>({...l,cierre_id:c.data.id}))); if(r.error)throw r.error;
+    }
+  }catch(e){ alert('No se pudo guardar: '+(e.message||e)); return; }
+  closeCapModal();
+  await loadData();
+  // mostrar el cierre recién guardado
+  capTipo=tipo;
+  document.querySelectorAll('#cap-tipo button').forEach(x=>x.classList.toggle('on',x.dataset.tipo===capTipo));
+  document.getElementById('cap-sub').textContent=(capTipo==='mensual'?'Cierre mensual':'Cierre parcial')+' · valores en USD';
+  fillFechas();
+  if([...fechaSel.options].some(o=>o.value===fecha)){ fechaSel.value=fecha; renderCapital(); }
+}
+async function deleteCapital(){
+  if(!capEditId)return;
+  if(!confirm('¿Eliminar este cierre y todas sus líneas?'))return;
+  const res=await db.from('cierres').delete().eq('id',capEditId);
+  if(res.error){ alert('No se pudo eliminar: '+res.error.message); return; }
+  closeCapModal(); await loadData(); fillFechas();
+}
+window.openCapModal=openCapModal; window.closeCapModal=closeCapModal; window.editCurrentCierre=editCurrentCierre;
+window.capModalCalc=capModalCalc; window.saveCapital=saveCapital; window.deleteCapital=deleteCapital;
+document.getElementById('cap-modal').addEventListener('click',e=>{ if(e.target.id==='cap-modal')closeCapModal(); });
+
 /* =====================================================================
    CONFIGURACIÓN
    ===================================================================== */

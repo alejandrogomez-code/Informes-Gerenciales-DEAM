@@ -31,7 +31,7 @@ const STAT_TXT = {ok:"Bien", warn:"Alerta", bad:"Urgente"};
 const TILES = [
  {view:"capital",name:"Capital de Trabajo",desc:"Estructura de activos, pasivos e indicadores de solvencia.",color:"#714B67",icon:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 4v16"/>'},
  {view:"equilibrio",name:"Punto de Equilibrio",desc:"Evolución del punto de equilibrio y margen de seguridad.",color:"#017E84",icon:'<path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/>'},
- {view:"gestion",name:"Informe de Gestión",desc:"Síntesis gerencial de desempeño.",color:"#3A6EA5",icon:'<path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/>',soon:true},
+ {view:"gestion",name:"Informe de Gestión",desc:"Estado de Resultados: ventas, costos, utilidad y resultado.",color:"#3A6EA5",icon:'<path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/>'},
  {view:"proyeccion",name:"Proyección",desc:"Escenarios futuros y tendencias.",color:"#2DA84F",icon:'<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',soon:true},
  {view:"presupuesto",name:"Presupuesto",desc:"Planificación y control presupuestario.",color:"#C9772E",icon:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/>',soon:true},
  {view:"analisis",name:"Análisis",desc:"Exploración de datos y comparativas.",color:"#8E44AD",icon:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',soon:true},

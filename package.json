@@ -1,0 +1,10 @@
+{
+  "name": "deam-informes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DEAM SRL — Informes Gerenciales (Capital de Trabajo y Punto de Equilibrio)",
+  "scripts": {
+    "dev": "npx serve .",
+    "start": "npx serve ."
+  }
+}

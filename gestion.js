@@ -123,6 +123,51 @@ function gScope(){
 }
 const gv=(val,cuenta)=> +val[cuenta]||0;
 
+/* ---- Parser robusto de números: acepta "5763438,8", "5763438.8", "1.234.567,89", etc.
+   Necesario porque <input> en es-AR puede devolver el valor con coma decimal,
+   y `+"5763438,8"` da NaN (perdiendo silenciosamente el valor en la suma). */
+function parseNum(s){
+  if(s==null) return 0;
+  let t = String(s).trim();
+  if(t==='') return 0;
+  // Permitir signo negativo intermedio o paréntesis estilo contable: "(123,45)" → -123,45
+  let neg = false;
+  if(t.startsWith('(') && t.endsWith(')')){ neg=true; t=t.slice(1,-1).trim(); }
+  // Remover espacios internos
+  t = t.replace(/\s+/g,'');
+  const hasDot   = t.includes('.');
+  const hasComma = t.includes(',');
+  if(hasDot && hasComma){
+    // Si están los dos, el ÚLTIMO que aparece es el separador decimal
+    if(t.lastIndexOf(',') > t.lastIndexOf('.')){
+      // Formato AR: puntos = miles, coma = decimal
+      t = t.replace(/\./g,'').replace(',','.');
+    } else {
+      // Formato EN: comas = miles, punto = decimal
+      t = t.replace(/,/g,'');
+    }
+  } else if(hasComma){
+    const count = (t.match(/,/g)||[]).length;
+    if(count > 1) t = t.replace(/,/g,'');      // múltiples comas → miles
+    else t = t.replace(',','.');                // una sola coma → decimal
+  } else if(hasDot){
+    const count = (t.match(/\./g)||[]).length;
+    if(count > 1) t = t.replace(/\./g,'');      // múltiples puntos → miles (AR)
+    // un solo punto: se deja como decimal (formato canónico JS)
+  }
+  const n = parseFloat(t);
+  if(!isFinite(n)) return 0;
+  return neg ? -n : n;
+}
+
+/* Formato para mostrar el valor numérico dentro de un <input type="text">.
+   Devuelve string vacío para 0/null/undefined (placeholder muestra "0"). */
+function fmtInputNum(v){
+  if(v==null || v==='' || v===0) return '';
+  // Mostrar con coma decimal estilo AR (sin separador de miles para no confundir el parseo al re-leer)
+  return String(v).replace('.', ',');
+}
+
 /* ---- totales y fórmulas ---- */
 function catTotal(key,val){ const c=G_CAT_BY_KEY[key]; return c.cuentas.reduce((a,x)=>a+gv(val,x.c),0); }
 function taxCredTotal(val){ return G_TAX.reduce((a,x)=>a+gv(val,x.c),0); }
@@ -187,8 +232,9 @@ function openGCatModal(key){
   let html='', lastG=null;
   cuentas.forEach((a,i)=>{
     if(a.g && a.g!==lastG){ html+=`<div class="cm-group">${a.g}</div>`; lastG=a.g; }
-    const val = valores[a.c]!=null ? valores[a.c] : '';
-    html+=`<div class="g-line"><label title="${a.c}">${a.n}</label><input type="number" id="g-in-${i}" data-c="${a.c}" value="${val}" oninput="gCatCalc()" placeholder="0"></div>`;
+    const raw = valores[a.c]!=null ? valores[a.c] : '';
+    const val = fmtInputNum(raw);
+    html+=`<div class="g-line"><label title="${a.c}">${a.n}</label><input type="text" inputmode="decimal" autocomplete="off" id="g-in-${i}" data-c="${a.c}" value="${val}" oninput="gCatCalc()" placeholder="0"></div>`;
   });
   document.getElementById('g-cat-body').innerHTML=html;
   gCatCalc();
@@ -197,7 +243,7 @@ function openGCatModal(key){
 function closeGCatModal(){ document.getElementById('g-cat-modal').classList.remove('show'); }
 function gCatCalc(){
   let tot=0;
-  document.querySelectorAll('#g-cat-body input').forEach(inp=>tot+=(+inp.value||0));
+  document.querySelectorAll('#g-cat-body input').forEach(inp=>tot+=parseNum(inp.value));
   document.getElementById('g-cat-total').innerHTML = `Total: <b class="mono ${tot<0?'neg':''}">${fmtARS(tot)}</b>`;
 }
 async function saveGCat(){
@@ -206,7 +252,8 @@ async function saveGCat(){
   const valores={...p.valores};
   document.querySelectorAll('#g-cat-body input').forEach(inp=>{
     const c=inp.dataset.c, v=inp.value;
-    if(v==='' || +v===0) delete valores[c]; else valores[c]=+v;
+    const num = parseNum(v);
+    if(v.trim()==='' || num===0) delete valores[c]; else valores[c]=num;
   });
   const r=await db.from('gestion_periodos').update({valores}).eq('id',p.id);
   if(r.error){ alert('No se pudo guardar: '+r.error.message); return; }

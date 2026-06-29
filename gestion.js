@@ -100,6 +100,7 @@ const G_EGRESOS = new Set([
    ===================================================================== */
 let gPeriodos = [];     // [{id, fecha, etiqueta, valores:{cuenta:monto}}]
 let gSel = null;        // id de período o 'acumulado'
+let gVista = 'periodo'; // 'periodo' o 'comparativa' — modo de vista del informe
 let gCatActual = null;  // categoría abierta en el modal ('tax' para créditos)
 
 const G_CAT_BY_KEY = {}; G_CATEGORIAS.forEach(c=>G_CAT_BY_KEY[c.key]=c);
@@ -200,9 +201,34 @@ function gComputar(val){
 }
 
 /* =====================================================================
-   RENDER
+   RENDER (dispatcher según modo de vista)
    ===================================================================== */
 function renderGestion(){
+  // Aplicar visibilidad del segmented toggle según estado
+  const toggle = document.getElementById('g-vista-toggle');
+  if(toggle) toggle.querySelectorAll('.seg').forEach(b=>{
+    b.classList.toggle('active', b.dataset.vista===gVista);
+  });
+  const periodoField = document.getElementById('g-periodo-field');
+  if(periodoField) periodoField.style.display = gVista==='comparativa' ? 'none' : '';
+
+  if(gVista==='comparativa') renderGestionComparativa();
+  else renderGestionPorPeriodo();
+}
+
+/* ---- modo "Por período" (vista tradicional, dos columnas) ---- */
+function renderGestionPorPeriodo(){
+  // Restaurar estructura de tabla de 2 columnas (puede haber sido reescrita por la vista comparativa)
+  const tabla = document.getElementById('g-table');
+  if(tabla && !document.getElementById('g-tbody')){
+    tabla.className = 'g-table';
+    tabla.innerHTML = '<thead><tr><th>Concepto</th><th>Importe (ARS)</th></tr></thead><tbody id="g-tbody"></tbody>';
+  }
+  // Limpiar clase de escala de impresión por si veníamos de comparativa
+  const wrap = document.getElementById('g-table-wrap');
+  if(wrap) wrap.className = '';
+  if(wrap) wrap.style.overflowX = 'auto';
+
   const tb=document.getElementById('g-tbody'); if(!tb) return;
   const sub=document.getElementById('g-sub');
   if(!gPeriodos.length){
@@ -234,6 +260,122 @@ function renderGestion(){
   }
   tb.innerHTML=html;
   document.getElementById('g-periodo').disabled=false;
+}
+
+/* ---- modo "Comparativa mensual" (períodos como columnas + Acumulado + Promedio) ---- */
+function renderGestionComparativa(){
+  const tabla = document.getElementById('g-table'); if(!tabla) return;
+  const sub = document.getElementById('g-sub');
+  const meta = document.getElementById('g-print-meta');
+
+  if(!gPeriodos.length){
+    tabla.className = 'g-table';
+    tabla.innerHTML = '<thead><tr><th>Concepto</th></tr></thead><tbody><tr><td style="text-align:center;color:var(--ink-faint);padding:40px">Sin períodos. Usá <b>+ Período</b> para crear el primero y cargar los datos.</td></tr></tbody>';
+    if(sub) sub.textContent='Comparativa mensual';
+    if(meta) meta.textContent='Comparativa mensual';
+    return;
+  }
+
+  // Períodos ordenados cronológicamente (por fecha de cierre)
+  const periodos = gPeriodos.slice().sort((a,b)=>(a.cierre||'').localeCompare(b.cierre||''));
+  const N = periodos.length;
+
+  // Pre-calcular: valores acumulados (suma cuenta-por-cuenta a lo largo de todos los períodos)
+  const valAcum = {};
+  periodos.forEach(p=>{ for(const k in p.valores) valAcum[k]=(valAcum[k]||0)+(+p.valores[k]||0); });
+  // Pre-calcular fórmulas para cada período + acumulado
+  const fPorPeriodo = periodos.map(p=>gComputar(p.valores));
+  const fAcum = gComputar(valAcum);
+
+  if(sub) sub.textContent = `Comparativa mensual · ${N} período${N===1?'':'s'} · importes en ARS`;
+  if(meta) meta.textContent = `Comparativa mensual · ${N} período${N===1?'':'s'}`;
+
+  // Construir <thead>: Concepto + cada período + Acumulado + Promedio
+  const headPeriodos = periodos.map(p=>`<th>${etiquetaCorta(p)}</th>`).join('');
+  const thead = `<thead><tr>
+    <th>Concepto</th>
+    ${headPeriodos}
+    <th class="g-c-edge">Acumulado</th>
+    <th class="g-c-edge">Promedio</th>
+  </tr></thead>`;
+
+  // Helper para una celda numérica
+  const cell = (v, edge)=>{
+    const neg = v<0;
+    return `<td class="mono ${neg?'neg':''}${edge?' g-c-edge':''}">${fmtARS(v)}</td>`;
+  };
+
+  // Construir <tbody> reutilizando el layout
+  let rows='';
+  for(const it of G_LAYOUT){
+    if(it.t==='space'){
+      rows += `<tr class="g-c-space"><td colspan="${N+3}"></td></tr>`;
+      continue;
+    }
+    if(it.t==='cat'){
+      const label = G_CAT_BY_KEY[it.key].label;
+      const valPorP = periodos.map(p=>catSigned(it.key, p.valores));
+      const valAc = catSigned(it.key, valAcum);
+      const valPr = N>0 ? valAc/N : 0;
+      rows += `<tr class="g-c-cat"><td>${label}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}</tr>`;
+    } else if(it.t==='formula'){
+      const valPorP = fPorPeriodo.map(f=>f[it.key]);
+      const valAc = fAcum[it.key];
+      const valPr = N>0 ? valAc/N : 0;
+      rows += `<tr class="g-c-formula g-c-${it.tone}"><td>${it.label}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}</tr>`;
+    } else if(it.t==='calc'){
+      const valPorP = fPorPeriodo.map(f=>f.impuesto_ganancias);
+      const valAc = fAcum.impuesto_ganancias;
+      const valPr = N>0 ? valAc/N : 0;
+      rows += `<tr class="g-c-calc"><td>${it.label} <span class="g-tag">−30% s/ Utilidad Neta</span></td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}</tr>`;
+    } else if(it.t==='taxblock'){
+      // Una fila por cada cuenta del bloque de créditos de impuesto
+      for(const a of G_TAX){
+        const valPorP = periodos.map(p=>gv(p.valores,a.c));
+        const valAc = gv(valAcum,a.c);
+        const valPr = N>0 ? valAc/N : 0;
+        rows += `<tr class="g-c-tax"><td>${a.n}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}</tr>`;
+      }
+    }
+  }
+
+  tabla.className = 'g-table g-comp';
+  tabla.innerHTML = thead + `<tbody>${rows}</tbody>`;
+
+  // Auto-escala para impresión: si hay muchas columnas, achicar el wrapper
+  const wrap = document.getElementById('g-table-wrap');
+  if(wrap){
+    wrap.style.overflowX = 'auto';
+    wrap.className = '';
+    // Estimación: 240px (col concepto) + ~95px por cada columna de período + 2 columnas extra
+    const ancho = 240 + (N+2)*95;
+    if(ancho > 1800) wrap.classList.add('g-scale-80');
+    else if(ancho > 1500) wrap.classList.add('g-scale-85');
+    else if(ancho > 1250) wrap.classList.add('g-scale-90');
+    else if(ancho > 1100) wrap.classList.add('g-scale-95');
+  }
+}
+
+/* Etiqueta corta para encabezado de columna en vista comparativa.
+   Si el período tiene etiqueta tipo "Abril 2026", devuelve "abr 26". */
+function etiquetaCorta(p){
+  if(p.cierre){
+    const d = new Date(p.cierre+'T00:00');
+    if(!isNaN(d)){
+      const mes = d.toLocaleDateString('es-AR',{month:'short'}).replace('.','');
+      const yy = String(d.getFullYear()).slice(-2);
+      return `${mes} ${yy}`;
+    }
+  }
+  return p.etiqueta || '—';
+}
+
+/* Toggle de modo (botones "Por período" / "Comparativa mensual") */
+function setGVista(v){
+  if(v!=='periodo' && v!=='comparativa') return;
+  if(gVista===v) return;
+  gVista = v;
+  renderGestion();
 }
 
 /* =====================================================================
@@ -320,6 +462,7 @@ function exportGestion(){
 
 window.openGCatModal=openGCatModal; window.closeGCatModal=closeGCatModal; window.gCatCalc=gCatCalc; window.saveGCat=saveGCat;
 window.openGNewPeriod=openGNewPeriod; window.closeGPeriod=closeGPeriod; window.saveGPeriod=saveGPeriod; window.exportGestion=exportGestion;
+window.setGVista=setGVista;
 
 document.addEventListener('DOMContentLoaded',()=>{
   const sel=document.getElementById('g-periodo');

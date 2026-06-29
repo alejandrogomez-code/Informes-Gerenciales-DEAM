@@ -175,8 +175,11 @@ function gComputar(val){
   const ub = G_GRUPO_UB.reduce((a,k)=>a+catTotal(k,val),0);
   const un = ub + G_GRUPO_B.reduce((a,k)=>a+catTotal(k,val),0);
   const impuesto = un>0 ? un*-0.30 : 0;
-  const totImp = impuesto + taxCredTotal(val);
-  const res = un + totImp;
+  // "Total Impuesto a las Ganancias" = subtotal de créditos / pagos a cuenta (G_TAX). 
+  // La línea "Impuesto a las Ganancias" se muestra arriba como cálculo independiente.
+  const totImp = taxCredTotal(val);
+  // Resultado Después = Utilidad Neta + impuesto calculado + créditos.
+  const res = un + impuesto + totImp;
   return {utilidad_bruta:ub, utilidad_neta:un, impuesto_ganancias:impuesto, total_impuesto_ganancias:totImp, resultado_despues:res};
 }
 

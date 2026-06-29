@@ -300,11 +300,24 @@ function renderGestionComparativa(){
   const fAcum = gComputar(valAcum);
 
   // Bases para los porcentajes:
-  // - % Acumulado: total Ventas acumulado
-  // - % Promedio:  total Ventas acumulado / N (mismo cociente que % Acumulado matemáticamente,
-  //                pero lo dejamos explícito para que se vea en la columna)
+  // - % Acum: ponderado por el tamaño de cada mes → row.acumulado / Ventas.acumulado
+  // - % Prom: NO ponderado → promedio simple de (row[mes] / Ventas[mes]) sobre cada mes
+  //           (cada mes pesa igual sin importar su volumen de ventas)
   const ventasAc = catSigned('ventas', valAcum);
-  const ventasPr = N>0 ? ventasAc/N : 0;
+  const ventasPorPeriodo = periodos.map(p => catSigned('ventas', p.valores));
+
+  // Promedio simple de los % mensuales. Excluye meses con Ventas=0 (división inválida).
+  function avgPctMensual(numPorPeriodo){
+    let sum=0, count=0;
+    for(let i=0; i<N; i++){
+      const v = ventasPorPeriodo[i];
+      if(v && isFinite(v) && v!==0){
+        const r = numPorPeriodo[i]/v;
+        if(isFinite(r)){ sum+=r; count++; }
+      }
+    }
+    return count>0 ? sum/count : NaN;
+  }
 
   if(sub) sub.textContent = `Comparativa mensual · ${N} período${N===1?'':'s'} · importes en ARS`;
   if(meta) meta.textContent = `Comparativa mensual · ${N} período${N===1?'':'s'}`;
@@ -316,8 +329,8 @@ function renderGestionComparativa(){
     ${headPeriodos}
     <th class="g-c-edge">Acumulado</th>
     <th class="g-c-edge">Promedio</th>
-    <th class="g-c-pct g-c-pct-first">% Acum</th>
-    <th class="g-c-pct">% Prom</th>
+    <th class="g-c-pct g-c-pct-first" title="Acumulado de la fila ÷ Acumulado de Ventas (ponderado por tamaño de mes)">% Acum</th>
+    <th class="g-c-pct" title="Promedio simple de los % mensuales (cada mes pesa igual)">% Prom</th>
   </tr></thead>`;
 
   // Helper para una celda numérica
@@ -325,14 +338,17 @@ function renderGestionComparativa(){
     const neg = v<0;
     return `<td class="mono ${neg?'neg':''}${edge?' g-c-edge':''}">${fmtARS(v)}</td>`;
   };
-  // Helper para una celda de porcentaje
-  const cellPct = (num, base, first)=>{
-    let txt='—', neg=false;
-    if(base && isFinite(base) && base!==0){
-      const r=num/base;
-      if(isFinite(r)){ txt=_nfPct.format(r); neg=r<0; }
-    }
+  // Helper para una celda de porcentaje con razón ya calculada (ratio puede ser NaN)
+  const cellRatio = (ratio, first)=>{
+    const ok = isFinite(ratio);
+    const txt = ok ? _nfPct.format(ratio) : '—';
+    const neg = ok && ratio<0;
     return `<td class="mono g-c-pct${first?' g-c-pct-first':''} ${neg?'neg':''}">${txt}</td>`;
+  };
+  // Helper para % a partir de num/base (usado para % Acum)
+  const cellPctAc = (num, first)=>{
+    if(!ventasAc || !isFinite(ventasAc) || ventasAc===0) return cellRatio(NaN, first);
+    return cellRatio(num/ventasAc, first);
   };
 
   // Construir <tbody> reutilizando el layout
@@ -347,24 +363,28 @@ function renderGestionComparativa(){
       const valPorP = periodos.map(p=>catSigned(it.key, p.valores));
       const valAc = catSigned(it.key, valAcum);
       const valPr = N>0 ? valAc/N : 0;
-      rows += `<tr class="g-c-cat"><td>${label}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPct(valAc, ventasAc, true)}${cellPct(valPr, ventasPr)}</tr>`;
+      const pctProm = avgPctMensual(valPorP);
+      rows += `<tr class="g-c-cat"><td>${label}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPctAc(valAc, true)}${cellRatio(pctProm)}</tr>`;
     } else if(it.t==='formula'){
       const valPorP = fPorPeriodo.map(f=>f[it.key]);
       const valAc = fAcum[it.key];
       const valPr = N>0 ? valAc/N : 0;
-      rows += `<tr class="g-c-formula g-c-${it.tone}"><td>${it.label}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPct(valAc, ventasAc, true)}${cellPct(valPr, ventasPr)}</tr>`;
+      const pctProm = avgPctMensual(valPorP);
+      rows += `<tr class="g-c-formula g-c-${it.tone}"><td>${it.label}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPctAc(valAc, true)}${cellRatio(pctProm)}</tr>`;
     } else if(it.t==='calc'){
       const valPorP = fPorPeriodo.map(f=>f.impuesto_ganancias);
       const valAc = fAcum.impuesto_ganancias;
       const valPr = N>0 ? valAc/N : 0;
-      rows += `<tr class="g-c-calc"><td>${it.label} <span class="g-tag">−30% s/ Utilidad Neta</span></td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPct(valAc, ventasAc, true)}${cellPct(valPr, ventasPr)}</tr>`;
+      const pctProm = avgPctMensual(valPorP);
+      rows += `<tr class="g-c-calc"><td>${it.label} <span class="g-tag">−30% s/ Utilidad Neta</span></td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPctAc(valAc, true)}${cellRatio(pctProm)}</tr>`;
     } else if(it.t==='taxblock'){
       // Una fila por cada cuenta del bloque de créditos de impuesto
       for(const a of G_TAX){
         const valPorP = periodos.map(p=>gv(p.valores,a.c));
         const valAc = gv(valAcum,a.c);
         const valPr = N>0 ? valAc/N : 0;
-        rows += `<tr class="g-c-tax"><td>${a.n}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPct(valAc, ventasAc, true)}${cellPct(valPr, ventasPr)}</tr>`;
+        const pctProm = avgPctMensual(valPorP);
+        rows += `<tr class="g-c-tax"><td>${a.n}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPctAc(valAc, true)}${cellRatio(pctProm)}</tr>`;
       }
     }
   }
@@ -372,17 +392,29 @@ function renderGestionComparativa(){
   tabla.className = 'g-table g-comp';
   tabla.innerHTML = thead + `<tbody>${rows}</tbody>`;
 
-  // Auto-escala para impresión: si hay muchas columnas, achicar el wrapper
+  // Auto-escala para impresión basada en el ancho real del contenido.
+  // Ancho disponible en A4 landscape con márgenes 7mm ≈ 1069px @ 96dpi.
+  // Tabla: 240px (Concepto) + ~92px por cada columna de datos × (N + 4 columnas extra: Acum, Prom, %Acum, %Prom)
+  // Para cada escala, ancho_max_que_entra = 1069 / escala. La condición chequea
+  // que el contenido SUPERA ese máximo para forzar la escala siguiente más chica.
   const wrap = document.getElementById('g-table-wrap');
   if(wrap){
     wrap.style.overflowX = 'auto';
     wrap.className = '';
-    // Estimación: 240px (col concepto) + ~95px por cada columna de período + 4 columnas extra (Acum, Prom, %Acum, %Prom)
-    const ancho = 240 + (N+4)*95;
-    if(ancho > 1800) wrap.classList.add('g-scale-80');
-    else if(ancho > 1500) wrap.classList.add('g-scale-85');
-    else if(ancho > 1250) wrap.classList.add('g-scale-90');
-    else if(ancho > 1100) wrap.classList.add('g-scale-95');
+    const ancho = 240 + (N+4)*92;
+    if(ancho > 2138)      wrap.classList.add('g-scale-45');   // > 2138 → 0.45 (cubre hasta 2375)
+    else if(ancho > 1944) wrap.classList.add('g-scale-50');   // 1944-2138 → 0.50 (max 2138)
+    else if(ancho > 1781) wrap.classList.add('g-scale-55');   // 1781-1944 → 0.55 (max 1944)
+    else if(ancho > 1644) wrap.classList.add('g-scale-60');   // 1644-1781 → 0.60 (max 1781)
+    else if(ancho > 1527) wrap.classList.add('g-scale-65');   // 1527-1644 → 0.65 (max 1644)
+    else if(ancho > 1425) wrap.classList.add('g-scale-70');   // 1425-1527 → 0.70 (max 1527)
+    else if(ancho > 1336) wrap.classList.add('g-scale-75');   // 1336-1425 → 0.75 (max 1425)
+    else if(ancho > 1257) wrap.classList.add('g-scale-80');   // 1257-1336 → 0.80 (max 1336)
+    else if(ancho > 1188) wrap.classList.add('g-scale-85');   // 1188-1257 → 0.85 (max 1257)
+    else if(ancho > 1162) wrap.classList.add('g-scale-90');   // 1162-1188 → 0.90 (max 1188)
+    else if(ancho > 1125) wrap.classList.add('g-scale-92');   // 1125-1162 → 0.92 (max 1162)
+    else if(ancho > 1069) wrap.classList.add('g-scale-95');   // 1069-1125 → 0.95 (max 1125)
+    // ancho ≤ 1069: entra al 100% sin escalar
   }
 }
 

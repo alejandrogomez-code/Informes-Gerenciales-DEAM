@@ -138,15 +138,12 @@ function gScope(){
 }
 const gv=(val,cuenta)=> +val[cuenta]||0;
 
-/* Formateo de porcentajes estilo es-AR (coma decimal, 1 decimal). */
+/* Formateo de porcentajes estilo es-AR (coma decimal, 1 decimal).
+   Usado por las celdas % de las vistas Por Período y Comparativa.
+   Nota: app.js ya define una `fmtPct` propia con otra firma (toma una
+   fracción y devuelve "X%"); por eso acá uso únicamente `_nfPct.format()`
+   inline en las celdas, sin declarar una función con nombre colisionable. */
 const _nfPct = new Intl.NumberFormat('es-AR', {style:'percent', minimumFractionDigits:1, maximumFractionDigits:1});
-/* Devuelve "29,2%" o "—" si la base es 0/inválida. */
-function fmtPct(num, base){
-  if(!base || !isFinite(base) || base===0) return '—';
-  const r = num/base;
-  if(!isFinite(r)) return '—';
-  return _nfPct.format(r);
-}
 
 /* ---- Parser robusto de números: acepta "5763438,8", "5763438.8", "1.234.567,89", etc.
    Necesario porque <input> en es-AR puede devolver el valor con coma decimal,

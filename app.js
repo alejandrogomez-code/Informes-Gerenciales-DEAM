@@ -444,7 +444,51 @@ document.getElementById('modal').addEventListener('click',e=>{ if(e.target.id===
 /* =====================================================================
    EXPORT / IMPRESIÓN
    ===================================================================== */
-function printReport(){ window.print(); }
+/* Imprimir / PDF. El gráfico de Punto de Equilibrio se renderiza en un <canvas>
+   con Chart.js: cuando el navegador aplica @media print (que achica la altura
+   del .chart-wrap), el canvas no se redibuja a tiempo y el chart queda
+   recortado (eje Y muestra sólo el rango alto). Solución: antes de imprimir,
+   forzamos al chart a redibujarse en las dimensiones de impresión, lo
+   capturamos como PNG y lo insertamos como <img>. Después de imprimir,
+   restauramos el canvas. */
+function printReport(){
+  prepareChartsForPrint();
+  // Permitir que el browser pinte el <img> antes de abrir el diálogo
+  setTimeout(()=>window.print(), 30);
+}
+function prepareChartsForPrint(){
+  if(typeof beChart==='undefined' || !beChart) return;
+  const canvas = beChart.canvas;
+  const wrap = canvas && canvas.parentElement;
+  if(!wrap) return;
+  // Dimensiones de impresión: deben coincidir con @media print en styles.css
+  const PRINT_HEIGHT = '170px', PRINT_PADDING = '6px';
+  const origH = wrap.style.height, origP = wrap.style.padding;
+  wrap.style.height = PRINT_HEIGHT;
+  wrap.style.padding = PRINT_PADDING;
+  beChart.resize();
+  const dataUrl = beChart.toBase64Image('image/png', 1.0);
+  // Restaurar dimensiones de pantalla
+  wrap.style.height = origH;
+  wrap.style.padding = origP;
+  beChart.resize();
+  // Insertar <img> (se muestra sólo en print vía CSS)
+  let img = document.getElementById('beChart-print-img');
+  if(!img){
+    img = document.createElement('img');
+    img.id = 'beChart-print-img';
+    img.className = 'chart-print-img';
+    img.alt = 'Evolución del Punto de Equilibrio';
+    wrap.appendChild(img);
+  }
+  img.src = dataUrl;
+}
+function restoreChartsAfterPrint(){
+  const img = document.getElementById('beChart-print-img');
+  if(img) img.remove();
+}
+window.addEventListener('beforeprint', prepareChartsForPrint);
+window.addEventListener('afterprint', restoreChartsAfterPrint);
 function ensureXLSX(){ if(typeof XLSX==='undefined'){ alert('No se pudo cargar la librería de Excel. Verificá tu conexión e intentá de nuevo.'); return false; } return true; }
 function exportCapital(){
   if(!ensureXLSX())return; const c=curCierre(); if(!c){ alert('No hay cierre seleccionado.'); return; }

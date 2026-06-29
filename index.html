@@ -108,7 +108,11 @@
       <div class="control-panel">
         <div class="crumb">Informe de Gestión<small id="g-sub">Estado de Resultados</small></div>
         <div class="cp-spacer"></div>
-        <div class="field no-print"><label>Período</label><select id="g-periodo"></select></div>
+        <div class="seg-ctrl no-print" id="g-vista-toggle" role="tablist">
+          <button class="seg active" data-vista="periodo" onclick="setGVista('periodo')">Por período</button>
+          <button class="seg" data-vista="comparativa" onclick="setGVista('comparativa')">Comparativa mensual</button>
+        </div>
+        <div class="field no-print" id="g-periodo-field"><label>Período</label><select id="g-periodo"></select></div>
         <div class="field no-print"><label>&nbsp;</label><div style="display:flex;gap:8px">
           <button class="btn" onclick="openGNewPeriod()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>Período</button>
           <button class="btn gray sm" onclick="exportGestion()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Excel</button>
@@ -118,7 +122,7 @@
       <div class="content">
         <div class="print-head"><span class="logo">D</span><b>DEAM SRL — Informe de Gestión</b><span id="g-print-meta"></span></div>
         <div class="note no-print"><span>📊</span><div><b>Estado de Resultados.</b> Tocá una categoría (Ventas, CMV, etc.) para cargar o editar sus cuentas en pesos. Los totales, la Utilidad Bruta, la Utilidad Neta y el Resultado después de Impuestos se calculan solos con las fórmulas del Excel.</div></div>
-        <div class="panel"><div style="overflow-x:auto"><table id="g-table" class="g-table">
+        <div class="panel" id="g-panel"><div id="g-table-wrap" style="overflow-x:auto"><table id="g-table" class="g-table">
           <thead><tr><th>Concepto</th><th>Importe (ARS)</th></tr></thead>
           <tbody id="g-tbody"></tbody></table></div></div>
       </div>

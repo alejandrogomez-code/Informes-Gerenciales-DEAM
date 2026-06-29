@@ -138,6 +138,16 @@ function gScope(){
 }
 const gv=(val,cuenta)=> +val[cuenta]||0;
 
+/* Formateo de porcentajes estilo es-AR (coma decimal, 1 decimal). */
+const _nfPct = new Intl.NumberFormat('es-AR', {style:'percent', minimumFractionDigits:1, maximumFractionDigits:1});
+/* Devuelve "29,2%" o "—" si la base es 0/inválida. */
+function fmtPct(num, base){
+  if(!base || !isFinite(base) || base===0) return '—';
+  const r = num/base;
+  if(!isFinite(r)) return '—';
+  return _nfPct.format(r);
+}
+
 /* ---- Parser robusto de números: acepta "5763438,8", "5763438.8", "1.234.567,89", etc.
    Necesario porque <input> en es-AR puede devolver el valor con coma decimal,
    y `+"5763438,8"` da NaN (perdiendo silenciosamente el valor en la suma). */
@@ -218,11 +228,11 @@ function renderGestion(){
 
 /* ---- modo "Por período" (vista tradicional, dos columnas) ---- */
 function renderGestionPorPeriodo(){
-  // Restaurar estructura de tabla de 2 columnas (puede haber sido reescrita por la vista comparativa)
+  // Restaurar estructura de tabla de 3 columnas (puede haber sido reescrita por la vista comparativa)
   const tabla = document.getElementById('g-table');
   if(tabla && !document.getElementById('g-tbody')){
     tabla.className = 'g-table';
-    tabla.innerHTML = '<thead><tr><th>Concepto</th><th>Importe (ARS)</th></tr></thead><tbody id="g-tbody"></tbody>';
+    tabla.innerHTML = '<thead><tr><th>Concepto</th><th>Importe (ARS)</th><th>%</th></tr></thead><tbody id="g-tbody"></tbody>';
   }
   // Limpiar clase de escala de impresión por si veníamos de comparativa
   const wrap = document.getElementById('g-table-wrap');
@@ -232,7 +242,7 @@ function renderGestionPorPeriodo(){
   const tb=document.getElementById('g-tbody'); if(!tb) return;
   const sub=document.getElementById('g-sub');
   if(!gPeriodos.length){
-    tb.innerHTML='<tr><td colspan="2" style="text-align:center;color:var(--ink-faint);padding:40px">Sin períodos. Usá <b>+ Período</b> para crear el primero y cargar los datos.</td></tr>';
+    tb.innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--ink-faint);padding:40px">Sin períodos. Usá <b>+ Período</b> para crear el primero y cargar los datos.</td></tr>';
     if(sub) sub.textContent='Estado de Resultados';
     return;
   }
@@ -241,21 +251,26 @@ function renderGestionPorPeriodo(){
   if(sub) sub.textContent = (gSel==='acumulado'?'Acumulado del ejercicio':(gScope().periodo?gScope().periodo.etiqueta:''))+' · importes en ARS';
   const meta=document.getElementById('g-print-meta'); if(meta) meta.textContent = gSel==='acumulado'?'Acumulado del ejercicio':(gScope().periodo?gScope().periodo.etiqueta:'');
 
+  // Total Ventas del mes/acumulado: base para los porcentajes (= 100%).
+  const ventasBase = catSigned('ventas', valores);
   const money=v=>{ const neg=v<0; return `<span class="mono ${neg?'neg':''}">${fmtARS(v)}</span>`; };
+  const pctCell=v=>{ const r = (ventasBase && isFinite(ventasBase) && ventasBase!==0) ? v/ventasBase : NaN;
+                     const txt = isFinite(r) ? _nfPct.format(r) : '—';
+                     return `<td class="mono g-pct ${r<0?'neg':''}">${txt}</td>`; };
   let html='';
   for(const it of G_LAYOUT){
-    if(it.t==='space'){ html+='<tr class="g-space"><td colspan="2"></td></tr>'; continue; }
+    if(it.t==='space'){ html+='<tr class="g-space"><td colspan="3"></td></tr>'; continue; }
     if(it.t==='cat'){
       const c=G_CAT_BY_KEY[it.key], val=catSigned(it.key,valores);
       html+=`<tr class="g-cat" onclick="openGCatModal('${it.key}')" title="Cargar / editar">
-        <td><span class="g-chev">▸</span>${c.label}</td><td>${money(val)}</td></tr>`;
+        <td><span class="g-chev">▸</span>${c.label}</td><td>${money(val)}</td>${pctCell(val)}</tr>`;
     } else if(it.t==='formula'){
-      html+=`<tr class="g-formula g-${it.tone}"><td>${it.label}</td><td>${money(f[it.key])}</td></tr>`;
+      html+=`<tr class="g-formula g-${it.tone}"><td>${it.label}</td><td>${money(f[it.key])}</td>${pctCell(f[it.key])}</tr>`;
     } else if(it.t==='calc'){
-      html+=`<tr class="g-row-ind"><td>${it.label} <span class="g-tag">−30% s/ Utilidad Neta</span></td><td>${money(f.impuesto_ganancias)}</td></tr>`;
+      html+=`<tr class="g-row-ind"><td>${it.label} <span class="g-tag">−30% s/ Utilidad Neta</span></td><td>${money(f.impuesto_ganancias)}</td>${pctCell(f.impuesto_ganancias)}</tr>`;
     } else if(it.t==='taxblock'){
       html+=G_TAX.map(a=>`<tr class="g-row-ind g-click" onclick="openGCatModal('tax')" title="Cargar / editar">
-        <td style="padding-left:30px">${a.n}</td><td>${money(gv(valores,a.c))}</td></tr>`).join('');
+        <td style="padding-left:30px">${a.n}</td><td>${money(gv(valores,a.c))}</td>${pctCell(gv(valores,a.c))}</tr>`).join('');
     }
   }
   tb.innerHTML=html;
@@ -287,16 +302,25 @@ function renderGestionComparativa(){
   const fPorPeriodo = periodos.map(p=>gComputar(p.valores));
   const fAcum = gComputar(valAcum);
 
+  // Bases para los porcentajes:
+  // - % Acumulado: total Ventas acumulado
+  // - % Promedio:  total Ventas acumulado / N (mismo cociente que % Acumulado matemáticamente,
+  //                pero lo dejamos explícito para que se vea en la columna)
+  const ventasAc = catSigned('ventas', valAcum);
+  const ventasPr = N>0 ? ventasAc/N : 0;
+
   if(sub) sub.textContent = `Comparativa mensual · ${N} período${N===1?'':'s'} · importes en ARS`;
   if(meta) meta.textContent = `Comparativa mensual · ${N} período${N===1?'':'s'}`;
 
-  // Construir <thead>: Concepto + cada período + Acumulado + Promedio
+  // Construir <thead>: Concepto + cada período + Acumulado + Promedio + % Acumulado + % Promedio
   const headPeriodos = periodos.map(p=>`<th>${etiquetaCorta(p)}</th>`).join('');
   const thead = `<thead><tr>
     <th>Concepto</th>
     ${headPeriodos}
     <th class="g-c-edge">Acumulado</th>
     <th class="g-c-edge">Promedio</th>
+    <th class="g-c-pct g-c-pct-first">% Acum</th>
+    <th class="g-c-pct">% Prom</th>
   </tr></thead>`;
 
   // Helper para una celda numérica
@@ -304,12 +328,21 @@ function renderGestionComparativa(){
     const neg = v<0;
     return `<td class="mono ${neg?'neg':''}${edge?' g-c-edge':''}">${fmtARS(v)}</td>`;
   };
+  // Helper para una celda de porcentaje
+  const cellPct = (num, base, first)=>{
+    let txt='—', neg=false;
+    if(base && isFinite(base) && base!==0){
+      const r=num/base;
+      if(isFinite(r)){ txt=_nfPct.format(r); neg=r<0; }
+    }
+    return `<td class="mono g-c-pct${first?' g-c-pct-first':''} ${neg?'neg':''}">${txt}</td>`;
+  };
 
   // Construir <tbody> reutilizando el layout
   let rows='';
   for(const it of G_LAYOUT){
     if(it.t==='space'){
-      rows += `<tr class="g-c-space"><td colspan="${N+3}"></td></tr>`;
+      rows += `<tr class="g-c-space"><td colspan="${N+5}"></td></tr>`;
       continue;
     }
     if(it.t==='cat'){
@@ -317,24 +350,24 @@ function renderGestionComparativa(){
       const valPorP = periodos.map(p=>catSigned(it.key, p.valores));
       const valAc = catSigned(it.key, valAcum);
       const valPr = N>0 ? valAc/N : 0;
-      rows += `<tr class="g-c-cat"><td>${label}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}</tr>`;
+      rows += `<tr class="g-c-cat"><td>${label}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPct(valAc, ventasAc, true)}${cellPct(valPr, ventasPr)}</tr>`;
     } else if(it.t==='formula'){
       const valPorP = fPorPeriodo.map(f=>f[it.key]);
       const valAc = fAcum[it.key];
       const valPr = N>0 ? valAc/N : 0;
-      rows += `<tr class="g-c-formula g-c-${it.tone}"><td>${it.label}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}</tr>`;
+      rows += `<tr class="g-c-formula g-c-${it.tone}"><td>${it.label}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPct(valAc, ventasAc, true)}${cellPct(valPr, ventasPr)}</tr>`;
     } else if(it.t==='calc'){
       const valPorP = fPorPeriodo.map(f=>f.impuesto_ganancias);
       const valAc = fAcum.impuesto_ganancias;
       const valPr = N>0 ? valAc/N : 0;
-      rows += `<tr class="g-c-calc"><td>${it.label} <span class="g-tag">−30% s/ Utilidad Neta</span></td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}</tr>`;
+      rows += `<tr class="g-c-calc"><td>${it.label} <span class="g-tag">−30% s/ Utilidad Neta</span></td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPct(valAc, ventasAc, true)}${cellPct(valPr, ventasPr)}</tr>`;
     } else if(it.t==='taxblock'){
       // Una fila por cada cuenta del bloque de créditos de impuesto
       for(const a of G_TAX){
         const valPorP = periodos.map(p=>gv(p.valores,a.c));
         const valAc = gv(valAcum,a.c);
         const valPr = N>0 ? valAc/N : 0;
-        rows += `<tr class="g-c-tax"><td>${a.n}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}</tr>`;
+        rows += `<tr class="g-c-tax"><td>${a.n}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPct(valAc, ventasAc, true)}${cellPct(valPr, ventasPr)}</tr>`;
       }
     }
   }
@@ -347,8 +380,8 @@ function renderGestionComparativa(){
   if(wrap){
     wrap.style.overflowX = 'auto';
     wrap.className = '';
-    // Estimación: 240px (col concepto) + ~95px por cada columna de período + 2 columnas extra
-    const ancho = 240 + (N+2)*95;
+    // Estimación: 240px (col concepto) + ~95px por cada columna de período + 4 columnas extra (Acum, Prom, %Acum, %Prom)
+    const ancho = 240 + (N+4)*95;
     if(ancho > 1800) wrap.classList.add('g-scale-80');
     else if(ancho > 1500) wrap.classList.add('g-scale-85');
     else if(ancho > 1250) wrap.classList.add('g-scale-90');

@@ -81,6 +81,20 @@ const G_LAYOUT = [
 const G_GRUPO_B = ["otros_ingresos","rxt","sueldos","gastos_personal","honorarios","impuestos","gastos_bancarios","intereses","gastos_oficina","servicios","sistemas","viajes","marketing","bienes_uso","amortizaciones","inflacion","otros_gastos_op"];
 const G_GRUPO_UB = ["ventas","cmv","cmv_ind","ingenieria","comercializacion"];
 
+/* Categorías que el sistema trata como EGRESOS: se les invierte el signo al
+   sumar en Utilidad Bruta / Utilidad Neta. El usuario carga los montos en
+   positivo (la magnitud del gasto) y el sistema asigna los signos.
+   Las categorías que NO están aquí (ventas, otros_ingresos, rxt, inflacion)
+   se suman tal cual: las dos primeras como ingresos, las dos últimas como
+   resultados del período (RxT y RECPAM pueden dar ganancia o pérdida). */
+const G_EGRESOS = new Set([
+  "cmv","cmv_ind","ingenieria","comercializacion",
+  "sueldos","gastos_personal","honorarios","impuestos",
+  "gastos_bancarios","intereses","gastos_oficina","servicios",
+  "sistemas","viajes","marketing","bienes_uso","amortizaciones",
+  "otros_gastos_op"
+]);
+
 /* =====================================================================
    ESTADO / DATOS
    ===================================================================== */
@@ -170,10 +184,12 @@ function fmtInputNum(v){
 
 /* ---- totales y fórmulas ---- */
 function catTotal(key,val){ const c=G_CAT_BY_KEY[key]; return c.cuentas.reduce((a,x)=>a+gv(val,x.c),0); }
+/* Total con signo aplicado: egresos van con signo invertido (se restan al totalizar). */
+function catSigned(key,val){ const t=catTotal(key,val); return G_EGRESOS.has(key) ? -t : t; }
 function taxCredTotal(val){ return G_TAX.reduce((a,x)=>a+gv(val,x.c),0); }
 function gComputar(val){
-  const ub = G_GRUPO_UB.reduce((a,k)=>a+catTotal(k,val),0);
-  const un = ub + G_GRUPO_B.reduce((a,k)=>a+catTotal(k,val),0);
+  const ub = G_GRUPO_UB.reduce((a,k)=>a+catSigned(k,val),0);
+  const un = ub + G_GRUPO_B.reduce((a,k)=>a+catSigned(k,val),0);
   const impuesto = un>0 ? un*-0.30 : 0;
   // "Total Impuesto a las Ganancias" = subtotal de créditos / pagos a cuenta (G_TAX). 
   // La línea "Impuesto a las Ganancias" se muestra arriba como cálculo independiente.
@@ -204,7 +220,7 @@ function renderGestion(){
   for(const it of G_LAYOUT){
     if(it.t==='space'){ html+='<tr class="g-space"><td colspan="2"></td></tr>'; continue; }
     if(it.t==='cat'){
-      const c=G_CAT_BY_KEY[it.key], val=catTotal(it.key,valores);
+      const c=G_CAT_BY_KEY[it.key], val=catSigned(it.key,valores);
       html+=`<tr class="g-cat" onclick="openGCatModal('${it.key}')" title="Cargar / editar">
         <td><span class="g-chev">▸</span>${c.label}</td><td>${money(val)}</td></tr>`;
     } else if(it.t==='formula'){
@@ -231,7 +247,7 @@ function openGCatModal(key){
   const cuentas = esTax ? G_TAX : G_CAT_BY_KEY[key].cuentas;
   const titulo = esTax ? 'Créditos y pagos a cuenta de Ganancias' : G_CAT_BY_KEY[key].label;
   document.getElementById('g-cat-title').textContent = titulo;
-  document.getElementById('g-cat-sub').textContent = (periodo?periodo.etiqueta:'')+' · importes en ARS (negativos para egresos)';
+  document.getElementById('g-cat-sub').textContent = (periodo?periodo.etiqueta:'')+' · importes en ARS · ingresá los montos en positivo (el sistema asigna los signos)';
   let html='', lastG=null;
   cuentas.forEach((a,i)=>{
     if(a.g && a.g!==lastG){ html+=`<div class="cm-group">${a.g}</div>`; lastG=a.g; }
@@ -292,7 +308,7 @@ function exportGestion(){
   const aoa=[["DEAM SRL — Informe de Gestión"],[gSel==='acumulado'?'Acumulado':(gScope().periodo?gScope().periodo.etiqueta:'')],[],["Concepto","Importe ARS"]];
   for(const it of G_LAYOUT){
     if(it.t==='space'){ aoa.push([]); }
-    else if(it.t==='cat'){ aoa.push([G_CAT_BY_KEY[it.key].label, catTotal(it.key,valores)]); }
+    else if(it.t==='cat'){ aoa.push([G_CAT_BY_KEY[it.key].label, catSigned(it.key,valores)]); }
     else if(it.t==='formula'){ aoa.push([it.label, f[it.key]]); }
     else if(it.t==='calc'){ aoa.push([it.label, f.impuesto_ganancias]); }
     else if(it.t==='taxblock'){ G_TAX.forEach(a=>aoa.push(["   "+a.n, gv(valores,a.c)])); }

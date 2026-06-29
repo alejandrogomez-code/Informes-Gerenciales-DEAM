@@ -168,6 +168,18 @@
   /* ---------- Print / PDF ---------- */
   @media print{
     @page{size:A4 landscape;margin:9mm}
+    /* Subir contraste en impresión: las impresoras tienden a atenuar los grises
+       (--ink era #2b2b33 ≈ gris oscuro) y los números monospace en weight 400
+       quedan flojos. Forzamos negro pleno en los tokens y le damos más cuerpo
+       a los números. Pantalla queda intacta — sólo afecta a impresión / PDF. */
+    :root{
+      --ink:#000;
+      --ink-soft:#1f1f24;
+      --ink-faint:#444;
+      --bad:#7e1414;
+    }
+    body{color:#000}
+    .mono{font-weight:500;color:#000}
     body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .topbar,.sidebar,.burger,.modal-overlay,.home,.no-print,.note{display:none !important}
     .shell{display:block !important}

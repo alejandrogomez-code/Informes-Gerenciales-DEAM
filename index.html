@@ -127,7 +127,44 @@
           <tbody id="g-tbody"></tbody></table></div></div>
       </div>
     </section>
-    <section class="view" id="view-proyeccion"><div class="control-panel"><div class="crumb">Proyección<small>Próxima etapa</small></div></div><div class="content"><div class="panel"><div class="placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg><h2>Proyección</h2><p>Pendiente de definición.</p></div></div></div></section>
+    <!-- PROYECCIÓN · FLUJO DE CAJA -->
+    <section class="view" id="view-proyeccion">
+      <div class="control-panel">
+        <div class="crumb">Proyección<small id="py-sub">Flujo de caja · 12 meses · valores en ARS ($)</small></div>
+        <div class="cp-spacer"></div>
+        <div class="field no-print"><label>Moneda</label>
+          <div class="seg" id="py-moneda"><button class="on" data-moneda="ars" onclick="pySetMoneda('ars')">ARS $</button><button data-moneda="usd" onclick="pySetMoneda('usd')">USD</button></div></div>
+        <div class="field no-print"><label>&nbsp;</label><div style="display:flex;gap:8px">
+          <button class="btn gray sm" onclick="pyTriggerImport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg>Importar</button>
+          <button class="btn gray sm" onclick="exportProyeccion()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Excel</button>
+          <button class="btn gray sm" onclick="printReport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9V2h12v7M6 18H4v-6h16v6h-2M8 14h8v8H8z"/></svg>PDF</button>
+        </div></div>
+        <input type="file" id="py-file" accept=".xlsx,.xls" style="display:none" onchange="pyOnFile(this)">
+      </div>
+      <div class="content">
+        <div class="print-head"><span class="logo">D</span><b>DEAM SRL — Proyección · Flujo de Caja</b><span id="py-print-meta">Valores proyectados</span></div>
+        <div class="note no-print"><span>📈</span><div><b>Cómo se carga.</b> Tocá una celda editable (fondo blanco) para cargar el monto del mes en pesos. Las filas grises se calculan solas con las fórmulas del Excel. El toggle ARS/USD convierte con el dólar proyectado de cada mes. Podés exportar e importar la grilla en Excel.</div></div>
+
+        <div class="py-params-wrap no-print" id="py-params"></div>
+
+        <div class="panel">
+          <div class="panel-head"><h3>Flujo de Caja Proyectado</h3><div class="cp-spacer"></div>
+            <span style="font-size:11.5px;color:var(--ink-faint)">filas grises = calculadas</span></div>
+          <div class="py-scroll">
+            <table class="py-table">
+              <thead id="py-thead"></thead>
+              <tbody id="py-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="py-legend no-print">
+          <span><i class="py-sw py-sw-edit"></i> Editable (carga manual)</span>
+          <span><i class="py-sw py-sw-calc"></i> Calculada (fórmula)</span>
+          <span><i class="py-sw py-sw-sub"></i> Subtotal / resultado</span>
+        </div>
+      </div>
+    </section>
     <section class="view" id="view-presupuesto"><div class="control-panel"><div class="crumb">Presupuesto<small>Próxima etapa</small></div></div><div class="content"><div class="panel"><div class="placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg><h2>Presupuesto</h2><p>Pendiente de definición.</p></div></div></div></section>
     <section class="view" id="view-analisis"><div class="control-panel"><div class="crumb">Análisis<small>Próxima etapa</small></div></div><div class="content"><div class="panel"><div class="placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><h2>Análisis</h2><p>Pendiente de definición.</p></div></div></div></section>
 
@@ -203,5 +240,6 @@
 <script src="config.js"></script>
 <script src="app.js"></script>
 <script src="gestion.js"></script>
+<script src="proyeccion.js"></script>
 </body>
 </html>

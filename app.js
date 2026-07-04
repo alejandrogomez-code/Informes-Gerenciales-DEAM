@@ -33,7 +33,7 @@ const TILES = [
  {view:"equilibrio",name:"Punto de Equilibrio",desc:"Evolución del punto de equilibrio y margen de seguridad.",color:"#017E84",icon:'<path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/>'},
  {view:"gestion",name:"Informe de Gestión",desc:"Estado de Resultados: ventas, costos, utilidad y resultado.",color:"#3A6EA5",icon:'<path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/>'},
  {view:"proyeccion",name:"Proyección",desc:"Flujo de caja proyectado a 12 meses con carga manual.",color:"#2DA84F",icon:'<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>'},
- {view:"presupuesto",name:"Presupuesto",desc:"Planificación y control presupuestario.",color:"#C9772E",icon:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/>',soon:true},
+ {view:"presupuesto",name:"Presupuesto",desc:"Seguimiento presupuestario: carga mensual, comparación y gráficos.",color:"#C9772E",icon:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/>'},
  {view:"analisis",name:"Análisis",desc:"Exploración de datos y comparativas.",color:"#8E44AD",icon:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',soon:true},
  {view:"config",name:"Configuración",desc:"Umbrales, parámetros y ajustes del sistema.",color:"#6b6675",icon:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>'},
 ];
@@ -200,7 +200,6 @@ function renderCapital(){
   if(!c){ tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--ink-faint);padding:30px">Sin cierres cargados para este filtro.</td></tr>';
     document.getElementById('cap-tc').textContent='TC —'; document.getElementById('cap-pntag').textContent='PN —';
     document.getElementById('cap-indicators').innerHTML=''; return; }
-  document.getElementById('tc-pill').textContent="$"+nf0.format(c.tc);
   document.getElementById('cap-tc').textContent="TC $"+nf0.format(c.tc);
   document.getElementById('cap-pntag').textContent="PN "+fmtUSD(c.totals.pn);
   document.getElementById('cap-print-meta').textContent=c.etiqueta+" · "+(c.tipo==='mensual'?'Cierre mensual':'Cierre parcial')+" · TC $"+nf0.format(c.tc);

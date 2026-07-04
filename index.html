@@ -22,7 +22,6 @@
   <div class="spacer"></div>
   <button class="grid-btn" onclick="goHome()" title="Inicio">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
-  <div class="pill">TC ref. <b id="tc-pill" class="mono">$1.430</b></div>
   <div class="usr">FR</div>
 </div>
 
@@ -165,7 +164,23 @@
         </div>
       </div>
     </section>
-    <section class="view" id="view-presupuesto"><div class="control-panel"><div class="crumb">Presupuesto<small>Próxima etapa</small></div></div><div class="content"><div class="panel"><div class="placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg><h2>Presupuesto</h2><p>Pendiente de definición.</p></div></div></div></section>
+    <!-- PRESUPUESTO · Seguimiento Presupuestario -->
+    <section class="view" id="view-presupuesto">
+      <div class="control-panel">
+        <div class="crumb">Presupuesto<small id="pr-sub">Seguimiento presupuestario · Ejercicio abril–marzo</small></div>
+        <div class="cp-spacer"></div>
+        <div class="field no-print"><label>Moneda</label>
+          <div class="seg" id="pr-moneda"><button class="on" onclick="prSetCurrency('ars')" id="pr-cur-ars">ARS $</button><button onclick="prSetCurrency('usd')" id="pr-cur-usd">USD</button></div></div>
+      </div>
+      <div class="content">
+        <div class="pr-tabs no-print" id="pr-tabs">
+          <button class="on" data-tab="grid" onclick="prSetView('grid')">Carga mensual</button>
+          <button data-tab="compare" onclick="prSetView('compare')">Comparación</button>
+          <button data-tab="graphs" onclick="prSetView('graphs')">Gráficos</button>
+        </div>
+        <div id="pr-host"></div>
+      </div>
+    </section>
     <section class="view" id="view-analisis"><div class="control-panel"><div class="crumb">Análisis<small>Próxima etapa</small></div></div><div class="content"><div class="panel"><div class="placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><h2>Análisis</h2><p>Pendiente de definición.</p></div></div></div></section>
 
     <section class="view" id="view-config"><div class="control-panel"><div class="crumb">Configuración<small>Umbrales de los indicadores</small></div></div>
@@ -241,5 +256,6 @@
 <script src="app.js"></script>
 <script src="gestion.js"></script>
 <script src="proyeccion.js"></script>
+<script src="presupuesto.js"></script>
 </body>
 </html>

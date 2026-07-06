@@ -520,3 +520,16 @@
 .pr-tclabel{font-weight:700;color:var(--teal);font-size:12px}
 .pr-cell.pr-tc{color:var(--teal);font-weight:700}
 .pr-cell.pr-tc::placeholder{color:#9fc4bd;font-weight:400}
+
+/* Input de tipo de cambio único en la vista Referencia de Presupuesto */
+.pr-refcambio{background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 12px;
+  font-size:14px;font-weight:700;color:var(--teal);min-width:150px;font-family:'Roboto Mono',monospace;text-align:right}
+.pr-refcambio:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+
+/* Fila de tipo de cambio en el Informe de Gestión (vista Por período) */
+.g-tcrow td{background:#f3f7f6;border-bottom:1.5px solid var(--teal-soft)}
+.g-tc-label{font-weight:700;color:var(--teal);font-size:12.5px}
+.g-tc-input{width:150px;text-align:right;font-family:'Roboto Mono',monospace;font-size:13px;font-weight:700;
+  color:var(--teal);padding:5px 9px;border:1px solid var(--line);border-radius:7px;background:#fff}
+.g-tc-input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-soft)}
+.g-tc-input::placeholder{color:#9fc4bd;font-weight:400}

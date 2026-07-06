@@ -439,11 +439,24 @@ function renderGestionComparativa(){
     return count>0 ? sum/count : NaN;
   }
 
-  if(sub) sub.textContent = `Comparativa mensual · ${N} período${N===1?'':'s'} · importes en ARS`;
-  if(meta) meta.textContent = `Comparativa mensual · ${N} período${N===1?'':'s'}`;
-  // La comparativa mensual se muestra siempre en pesos (cada mes ya es su
-  // propia columna). El toggle USD aplica a la vista "Por período".
-  const gm=document.getElementById('g-moneda'); if(gm) gm.style.opacity = gIsUsd()?'0.5':'1';
+  const usd = gIsUsd();
+  // TC por período (para USD). Un período sin TC no se puede convertir.
+  const tcPorPeriodo = periodos.map(p=>gTcForFecha(p.fecha));
+  const faltanTc = usd ? tcPorPeriodo.filter(t=>!t).length : 0;
+  // Convierte un valor del período i a la moneda elegida (null si falta TC).
+  const cvP = (v,i)=>{ if(!usd) return v; const tc=tcPorPeriodo[i]; return (tc&&tc>0)?v/tc:null; };
+  // Acumulado en la moneda elegida: suma de cada período convertido a su TC.
+  const cvAcum = (valPorP)=>{ if(!usd) { return null; } let t=0; for(let i=0;i<N;i++){ const c=cvP(valPorP[i],i); if(c!=null) t+=c; } return t; };
+
+  const monLabel = usd ? 'USD' : 'ARS';
+  if(sub) sub.textContent = `Comparativa mensual · ${N} período${N===1?'':'s'} · importes en ${monLabel}`;
+  if(meta) meta.textContent = `Comparativa mensual · ${N} período${N===1?'':'s'}${usd?' · USD':''}`;
+  const gm=document.getElementById('g-moneda'); if(gm) gm.style.opacity='1';
+
+  // Aviso si en USD falta cargar TC en algún período
+  const avisoTc = (usd && faltanTc>0)
+    ? `<tr class="g-c-space"><td colspan="${N+5}" style="text-align:center;color:var(--ink-faint);padding:14px;font-size:12px">Hay ${faltanTc} período${faltanTc===1?'':'s'} sin tipo de cambio cargado: esas columnas aparecen como «—». Cargá el TC en «Por período» o en Presupuesto.</td></tr>`
+    : '';
 
   // Construir <thead>: Concepto + cada período + Acumulado + Promedio + % Acumulado + % Promedio
   const headPeriodos = periodos.map(p=>`<th>${etiquetaCorta(p)}</th>`).join('');
@@ -456,10 +469,11 @@ function renderGestionComparativa(){
     <th class="g-c-pct" title="Promedio simple de los % mensuales (cada mes pesa igual)">% Prom</th>
   </tr></thead>`;
 
-  // Helper para una celda numérica
+  // Helper para una celda numérica (respeta la moneda; null → «—»)
   const cell = (v, edge)=>{
+    if(usd && v==null) return `<td class="mono${edge?' g-c-edge':''}">—</td>`;
     const neg = v<0;
-    return `<td class="mono ${neg?'neg':''}${edge?' g-c-edge':''}">${fmtARS(v)}</td>`;
+    return `<td class="mono ${neg?'neg':''}${edge?' g-c-edge':''}">${usd?fmtUSD(v):fmtARS(v)}</td>`;
   };
   // Helper para una celda de porcentaje con razón ya calculada (ratio puede ser NaN)
   const cellRatio = (ratio, first)=>{
@@ -475,7 +489,12 @@ function renderGestionComparativa(){
   };
 
   // Construir <tbody> reutilizando el layout
-  let rows='';
+  let rows=avisoTc;
+  // valor mostrado por columna de período (convertido o no)
+  const cols = valPorP => valPorP.map((v,i)=>cell(cvP(v,i))).join('');
+  // acumulado y promedio en la moneda elegida
+  const accShown = (valPorP, valAcARS) => usd ? cvAcum(valPorP) : valAcARS;
+  const promShown = (accVal) => (accVal==null) ? null : (N>0?accVal/N:0);
   for(const it of G_LAYOUT){
     if(it.t==='space'){
       rows += `<tr class="g-c-space"><td colspan="${N+5}"></td></tr>`;
@@ -485,29 +504,28 @@ function renderGestionComparativa(){
       const label = G_CAT_BY_KEY[it.key].label;
       const valPorP = periodos.map(p=>catSigned(it.key, p.valores));
       const valAc = catSigned(it.key, valAcum);
-      const valPr = N>0 ? valAc/N : 0;
+      const accV = accShown(valPorP, valAc); const prV = promShown(accV);
       const pctProm = avgPctMensual(valPorP);
-      rows += `<tr class="g-c-cat"><td>${label}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPctAc(valAc, true)}${cellRatio(pctProm)}</tr>`;
+      rows += `<tr class="g-c-cat"><td>${label}</td>${cols(valPorP)}${cell(accV,true)}${cell(prV,true)}${cellPctAc(valAc, true)}${cellRatio(pctProm)}</tr>`;
     } else if(it.t==='formula'){
       const valPorP = fPorPeriodo.map(f=>f[it.key]);
       const valAc = fAcum[it.key];
-      const valPr = N>0 ? valAc/N : 0;
+      const accV = accShown(valPorP, valAc); const prV = promShown(accV);
       const pctProm = avgPctMensual(valPorP);
-      rows += `<tr class="g-c-formula g-c-${it.tone}"><td>${it.label}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPctAc(valAc, true)}${cellRatio(pctProm)}</tr>`;
+      rows += `<tr class="g-c-formula g-c-${it.tone}"><td>${it.label}</td>${cols(valPorP)}${cell(accV,true)}${cell(prV,true)}${cellPctAc(valAc, true)}${cellRatio(pctProm)}</tr>`;
     } else if(it.t==='calc'){
       const valPorP = fPorPeriodo.map(f=>f.impuesto_ganancias);
       const valAc = fAcum.impuesto_ganancias;
-      const valPr = N>0 ? valAc/N : 0;
+      const accV = accShown(valPorP, valAc); const prV = promShown(accV);
       const pctProm = avgPctMensual(valPorP);
-      rows += `<tr class="g-c-calc"><td>${it.label} <span class="g-tag">−30% s/ Utilidad Neta</span></td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPctAc(valAc, true)}${cellRatio(pctProm)}</tr>`;
+      rows += `<tr class="g-c-calc"><td>${it.label} <span class="g-tag">−30% s/ Utilidad Neta</span></td>${cols(valPorP)}${cell(accV,true)}${cell(prV,true)}${cellPctAc(valAc, true)}${cellRatio(pctProm)}</tr>`;
     } else if(it.t==='taxblock'){
-      // Una fila por cada cuenta del bloque de créditos de impuesto
       for(const a of G_TAX){
         const valPorP = periodos.map(p=>gv(p.valores,a.c));
         const valAc = gv(valAcum,a.c);
-        const valPr = N>0 ? valAc/N : 0;
+        const accV = accShown(valPorP, valAc); const prV = promShown(accV);
         const pctProm = avgPctMensual(valPorP);
-        rows += `<tr class="g-c-tax"><td>${a.n}</td>${valPorP.map(v=>cell(v)).join('')}${cell(valAc,true)}${cell(valPr,true)}${cellPctAc(valAc, true)}${cellRatio(pctProm)}</tr>`;
+        rows += `<tr class="g-c-tax"><td>${a.n}</td>${cols(valPorP)}${cell(accV,true)}${cell(prV,true)}${cellPctAc(valAc, true)}${cellRatio(pctProm)}</tr>`;
       }
     }
   }

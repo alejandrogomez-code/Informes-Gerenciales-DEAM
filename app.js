@@ -16,15 +16,21 @@ let db = null;
 
 /* ---------- Constantes ---------- */
 const INDICADORES = [
- {key:"liquidez", name:"Liquidez", formula:"Activo Cte. / Patrimonio Neto", calc:c=>c.totals.actCte/c.totals.pn,
-  desc:"Mide cuánto del patrimonio está respaldado por activos de rápida conversión. Cuanto mayor, más holgura para afrontar el ciclo de importación sin descapitalizarse.",
-  rango:"Bien ≥ 1,00 · Alerta 0,70–1,00 · Urgente < 0,70", status:v=>v>=1?"ok":v>=0.7?"warn":"bad"},
+ {key:"liq_corr", name:"Liquidez Corriente", formula:"(Activo Cte. + Stock) / Pasivo", calc:c=>(c.totals.actCte+c.totals.stock)/c.totals.pasivo,
+  desc:"Cuántas veces el activo realizable (disponible, cheques, cobranzas y stock) cubre la deuda total. Mide si la empresa puede afrontar sus obligaciones sin descapitalizarse.",
+  rango:"Bien ≥ 1,30 · Alerta 1,05–1,30 · Urgente < 1,05", status:v=>v>=1.3?"ok":v>=1.05?"warn":"bad"},
+ {key:"liq_inm", name:"Liquidez Inmediata", formula:"(Caja + Bancos + Cheques) / Pasivo", calc:c=>c.totals.disponible/c.totals.pasivo,
+  desc:"Porción del pasivo cubierta hoy con activos líquidos: caja, bancos y cheques en cartera (descontables de inmediato). Clave en el modelo de anticipar la venta con cartera de cheques.",
+  rango:"Bien ≥ 0,50 · Alerta 0,30–0,50 · Urgente < 0,30", status:v=>v>=0.5?"ok":v>=0.3?"warn":"bad"},
+ {key:"endeud", name:"Endeudamiento", formula:"Pasivo / Activo", calc:c=>c.totals.pasivo/c.totals.activo,
+  desc:"Qué proporción del activo está financiada con deuda. En escala 0 a 1, es estable frente a saltos del patrimonio y no se distorsiona al anticipar ventas.",
+  rango:"Bien ≤ 0,65 · Alerta 0,65–0,80 · Urgente > 0,80", status:v=>v<=0.65?"ok":v<=0.8?"warn":"bad"},
  {key:"apalanc", name:"Apalancamiento Financiero", formula:"Activo / Patrimonio Neto", calc:c=>c.totals.activo/c.totals.pn,
-  desc:"Cuántos pesos de activo sostiene cada peso de capital propio. En una importadora es naturalmente alto por el financiamiento, pero por encima de 3x el riesgo se vuelve crítico.",
-  rango:"Bien ≤ 2,00 · Alerta 2,00–3,00 · Urgente > 3,00", status:v=>v<=2?"ok":v<=3?"warn":"bad"},
- {key:"endeud", name:"Endeudamiento", formula:"Pasivo / Patrimonio Neto", calc:c=>c.totals.pasivo/c.totals.pn,
-  desc:"Proporción de deuda frente al capital propio. Hasta 1x la deuda no supera al patrimonio; entre 1x y 2x exige seguimiento; sobre 2x compromete la solvencia ante saltos del tipo de cambio.",
-  rango:"Bien ≤ 1,00 · Alerta 1,00–2,00 · Urgente > 2,00", status:v=>v<=1?"ok":v<=2?"warn":"bad"},
+  desc:"Cuántos pesos de activo sostiene cada peso de capital propio. En una importadora que financia el ciclo es naturalmente alto; el riesgo aparece por encima de 4,5x.",
+  rango:"Bien ≤ 3,50 · Alerta 3,50–4,50 · Urgente > 4,50", status:v=>v<=3.5?"ok":v<=4.5?"warn":"bad"},
+ {key:"autonomia", name:"Autonomía Patrimonial", formula:"Patrimonio Neto / Activo", calc:c=>c.totals.pn/c.totals.activo,
+  desc:"Porción del activo respaldada con capital propio. Complementa el endeudamiento: cuanto mayor, menos dependencia del financiamiento externo.",
+  rango:"Bien ≥ 0,35 · Alerta 0,20–0,35 · Urgente < 0,20", status:v=>v>=0.35?"ok":v>=0.2?"warn":"bad"},
 ];
 const STAT_TXT = {ok:"Bien", warn:"Alerta", bad:"Urgente"};
 
@@ -73,7 +79,15 @@ function totalsFromLineas(lineas){
   const pasivo=Math.abs(sum('pasivo','monto_usd'));
   const activo=actCte+stock;
   const pn=activo-pasivo;
-  return {actCte,stock,activo,pasivo,pn};
+  // Disponible = activos líquidos de conversión inmediata dentro del activo
+  // corriente: caja, bancos, FCI y cheques en cartera (descontables hoy).
+  // Excluye "Deudas a cobrar" (cobranza pendiente, no inmediata).
+  const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  const LIQUIDOS=['caja','bancos','bancos usd','fci','cheques'];
+  const disponible=lineas
+    .filter(l=>l.categoria==='activo_corriente' && LIQUIDOS.includes(norm(l.rubro)))
+    .reduce((a,l)=>a+(+l.monto_usd||0),0);
+  return {actCte,stock,activo,pasivo,pn,disponible};
 }
 
 function buildCierres(cierres, lineas){
@@ -261,11 +275,14 @@ function editCurrentCierre(){ const c=curCierre(); if(c) openCapModal(c.id); }
 function capModalCalc(){
   const tc=+document.getElementById('cm-tc').value||0;
   const fecha=document.getElementById('cm-fecha').value||'9999-12-31';
-  let actCte=0,stock=0,pasivo=0;
+  let actCte=0,stock=0,pasivo=0,disponible=0;
+  const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  const LIQUIDOS=['caja','bancos','bancos usd','fci','cheques'];
   RUBROS.forEach((r,i)=>{
     const ars=+document.getElementById('cm-r'+i).value||0, usd=tc?ars/tc:0;
     document.getElementById('cm-u'+i).textContent=tc?fmtUSD(r.cat==='pasivo'?-usd:usd):'US$ —';
-    if(r.cat==='activo_corriente')actCte+=usd; else if(r.cat==='stock')stock+=usd; else pasivo+=usd;
+    if(r.cat==='activo_corriente'){ actCte+=usd; if(LIQUIDOS.includes(norm(r.rubro))) disponible+=usd; }
+    else if(r.cat==='stock')stock+=usd; else pasivo+=usd;
   });
   const activo=actCte+stock, pn=activo-pasivo;
   const prev=[...cierresFull].reverse().find(x=>x.tipo==='mensual'&&x.id!==capEditId&&x.fecha<fecha);
@@ -277,11 +294,10 @@ function capModalCalc(){
     ['Total Pasivo',-pasivo, vr(pasivo,prev?.totals.pasivo), true],
     ['Patrimonio Neto',pn, vr(pn,prev?.totals.pn), true],
   ];
-  const indDefs=[
-    ['Liquidez', pn?actCte/pn:0, INDICADORES[0].status],
-    ['Apalancamiento', pn?activo/pn:0, INDICADORES[1].status],
-    ['Endeudamiento', pn?pasivo/pn:0, INDICADORES[2].status],
-  ];
+  // Indicadores en vivo: reutiliza las fórmulas y umbrales de INDICADORES
+  const totalsLocal={actCte,stock,activo,pasivo,pn,disponible};
+  const cLocal={totals:totalsLocal};
+  const indDefs=INDICADORES.map(ind=>[ind.name, ind.calc(cLocal), ind.status]);
   const varCell=v=> v==null?'<span class="vr"></span>':`<span class="vr ${v>=0?'up':'down'}">${v>=0?'▲':'▼'} ${fmtPct(Math.abs(v))}</span>`;
   let html=totRows.map(r=>`<div class="cm-trow ${r[3]?'tot':''}"><span>${r[0]}</span><span class="v">${fmtUSD(r[1])}</span>${varCell(r[2])}</div>`).join('');
   html+='<div class="cm-inds">'+indDefs.map(d=>{const st=d[2](d[1]);return `<div class="cm-ind"><div class="l">${d[0]}</div><div class="n">${fmtX(d[1])}</div><div class="b s-${st}" style="background:none;padding:0">${STAT_TXT[st]}</div><div class="strip r-${st}"></div></div>`;}).join('')+'</div>';

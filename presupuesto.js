@@ -407,6 +407,13 @@ function prRenderGrid(host){
   }).join('');
   const tcRow = `<tr class="pr-tcrow"><td class="left pr-sticky"><span class="pr-tclabel">Tipo de cambio (cierre)</span></td>${tcCells}<td class="pr-num pr-sum"></td><td class="pr-num pr-sum"></td><td class="pr-num pr-sum"></td></tr>`;
 
+  // Fila de estado (marcar mes en revisión)
+  const revCells = mc.map(m=>{
+    const rev=(typeof revIsUnderReview==='function')&&revIsUnderReview(m.calendar_year,m.month_number);
+    return `<td class="pr-num ${rev?'rev-col':''}"><button class="pr-revbtn ${rev?'on':''}" title="${rev?'En revisión — clic para cerrar':'Marcar en revisión'}" onclick="revToggle(${m.calendar_year},${m.month_number})"><span class="dot"></span></button></td>`;
+  }).join('');
+  const revRow = `<tr class="pr-revrow no-print"><td class="left pr-sticky"><span class="pr-tclabel" style="color:#8a5a00">Estado (revisión)</span></td>${revCells}<td class="pr-num pr-sum"></td><td class="pr-num pr-sum"></td><td class="pr-num pr-sum"></td></tr>`;
+
   host.innerHTML = `
     <div class="controls no-print">
       <div class="field"><label>Ejercicio a cargar</label>
@@ -423,10 +430,11 @@ function prRenderGrid(host){
         <span style="font-size:11.5px;color:var(--ink-faint)">a la derecha: acumulado, promedio y % s/ventas</span></div>
       <div class="pr-scroll">
         <table class="pr-table">
+          <colgroup><col>${mc.map(m=>{ const rev=(typeof revIsUnderReview==='function')&&revIsUnderReview(m.calendar_year,m.month_number); return `<col class="${rev?'rev-col':''}">`; }).join('')}<col><col><col></colgroup>
           <thead><tr><th class="left pr-sticky">Categoría / Subcategoría</th>
-            ${mc.map(m=>`<th>${m.month_name.slice(0,3)} ${String(m.calendar_year).slice(2)}</th>`).join('')}
+            ${mc.map(m=>{ const rev=(typeof revIsUnderReview==='function')&&revIsUnderReview(m.calendar_year,m.month_number); return `<th class="${rev?'rev-col':''}">${m.month_name.slice(0,3)} ${String(m.calendar_year).slice(2)}${rev?'<br><span class="rev-badge">Rev.</span>':''}</th>`; }).join('')}
             <th class="pr-sum">Acum.</th><th class="pr-sum">Prom.</th><th class="pr-sum">% s/v</th></tr></thead>
-          <tbody>${tcRow}${rows}</tbody>
+          <tbody>${tcRow}${revRow}${rows}</tbody>
         </table>
       </div>
     </div>`;

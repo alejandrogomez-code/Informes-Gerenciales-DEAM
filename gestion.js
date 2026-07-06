@@ -101,6 +101,86 @@ const G_EGRESOS = new Set([
 let gPeriodos = [];     // [{id, fecha, etiqueta, valores:{cuenta:monto}}]
 let gSel = null;        // id de período o 'acumulado'
 let gVista = 'periodo'; // 'periodo' o 'comparativa' — modo de vista del informe
+let gMoneda = 'ars';    // 'ars' | 'usd' — moneda de visualización
+
+/* Tipo de cambio de un mes (YYYY-MM-DD → busca en months de Presupuesto).
+   La fuente única del TC es months.usd_rate; acá se lee por año-mes para
+   que Gestión y Presupuesto muestren siempre la misma cotización. */
+function gTcForFecha(fecha){
+  if(!fecha || typeof PR==='undefined' || !PR.months) return null;
+  const d=new Date(fecha+'T00:00:00');
+  const y=d.getFullYear(), mo=d.getMonth()+1;
+  const m=PR.months.find(x=>x.calendar_year===y && x.month_number===mo && x.usd_rate);
+  return m ? Number(m.usd_rate) : null;
+}
+/* TC del alcance actual (período puntual). Para 'acumulado' devuelve null
+   porque cada mes tiene su propio TC (la conversión se hace mes a mes). */
+function gCurrentTc(){
+  if(gSel==='acumulado') return null;
+  const p=gPeriodos.find(x=>x.id===gSel);
+  return p ? gTcForFecha(p.fecha) : null;
+}
+const gIsUsd = ()=> gMoneda==='usd';
+
+/* Guarda el TC de un período de Gestión en la fuente única (months.usd_rate
+   del mes calendario correspondiente, en el ejercicio de Presupuesto).
+   Así, cargar el dólar en Gestión lo sincroniza a Presupuesto y viceversa. */
+async function gSaveTc(fecha, nuevoTc){
+  if(typeof PR==='undefined' || !PR.months){ alert('Cargá primero el módulo de Presupuesto para sincronizar el tipo de cambio.'); return false; }
+  const d=new Date(fecha+'T00:00:00');
+  const y=d.getFullYear(), mo=d.getMonth()+1;
+  const m=PR.months.find(x=>x.calendar_year===y && x.month_number===mo);
+  if(!m){ alert(`No hay un mes ${mo}/${y} en los ejercicios de Presupuesto. Creá el ejercicio que corresponda para poder cargar su tipo de cambio.`); return false; }
+  if(!db){ alert('Conectá Supabase para guardar el tipo de cambio.'); return false; }
+  try{
+    const r=await db.from('months').update({usd_rate:nuevoTc}).eq('id',m.id);
+    if(r.error) throw r.error;
+    m.usd_rate=nuevoTc;                 // reflejar en memoria (fuente compartida)
+  }catch(e){ alert('No se pudo guardar el tipo de cambio: '+(e.message||e)); return false; }
+  return true;
+}
+function gTcFocus(inp){ const tc=gCurrentTc(); inp.value = tc?String(tc):''; inp.select(); }
+async function gTcBlur(inp){
+  const p=gPeriodos.find(x=>x.id===gSel); if(!p) return;
+  const val=inp.value.trim(); const num=parseNum(val);
+  const newVal=(val===''||isNaN(num)||num<=0)?null:num;
+  const prev=gCurrentTc();
+  if(newVal===prev){ renderGestion(); return; }
+  const ok=await gSaveTc(p.fecha, newVal);
+  if(ok){
+    renderGestion();
+    // reflejar el cambio también en Presupuesto si está cargado
+    if(typeof renderPresupuesto==='function' && typeof PR!=='undefined' && PR.loaded) renderPresupuesto();
+  }
+}
+window.gTcFocus=gTcFocus; window.gTcBlur=gTcBlur;
+
+/* Para el modo 'acumulado' en USD: convierte cada período a su propio TC y
+   suma por clave de fila. Devuelve un mapa { key: montoUSD } donde key es:
+   - la clave de categoría (it.key) para filas 'cat'
+   - la clave de fórmula (it.key) para filas 'formula'
+   - 'impuesto_ganancias' para la fila calculada
+   - 'cuenta:<código>' para cada crédito del taxblock
+   Los períodos sin TC cargado se omiten (no se suman). */
+function gAccumUsdMap(){
+  const map={};
+  const add=(k,v)=>{ if(v==null||!isFinite(v)) return; map[k]=(map[k]||0)+v; };
+  for(const p of gPeriodos){
+    const tc=gTcForFecha(p.fecha);
+    if(!tc || tc<=0) continue;              // sin TC → no se puede convertir ese mes
+    const val=p.valores||{};
+    const f=gComputar(val);
+    // categorías
+    for(const it of G_LAYOUT){
+      if(it.t==='cat') add(it.key, catSigned(it.key,val)/tc);
+      else if(it.t==='formula') add(it.key, (f[it.key]||0)/tc);
+      else if(it.t==='calc') add('impuesto_ganancias', (f.impuesto_ganancias||0)/tc);
+    }
+    // créditos de ganancias (taxblock)
+    for(const a of G_TAX) add('cuenta:'+a.c, gv(val,a.c)/tc);
+  }
+  return map;
+}
 let gCatActual = null;  // categoría abierta en el modal ('tax' para créditos)
 
 const G_CAT_BY_KEY = {}; G_CATEGORIAS.forEach(c=>G_CAT_BY_KEY[c.key]=c);
@@ -238,6 +318,7 @@ function renderGestionPorPeriodo(){
 
   const tb=document.getElementById('g-tbody'); if(!tb) return;
   const sub=document.getElementById('g-sub');
+  const gm=document.getElementById('g-moneda'); if(gm) gm.style.opacity='1';
   if(!gPeriodos.length){
     tb.innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--ink-faint);padding:40px">Sin períodos. Usá <b>+ Período</b> para crear el primero y cargar los datos.</td></tr>';
     if(sub) sub.textContent='Estado de Resultados';
@@ -245,29 +326,68 @@ function renderGestionPorPeriodo(){
   }
   const {valores,editable} = gScope();
   const f = gComputar(valores);
-  if(sub) sub.textContent = (gSel==='acumulado'?'Acumulado del ejercicio':(gScope().periodo?gScope().periodo.etiqueta:''))+' · importes en ARS';
-  const meta=document.getElementById('g-print-meta'); if(meta) meta.textContent = gSel==='acumulado'?'Acumulado del ejercicio':(gScope().periodo?gScope().periodo.etiqueta:'');
+  const usd = gIsUsd();
+  const monLabel = usd ? 'USD' : 'ARS';
 
-  // Total Ventas del mes/acumulado: base para los porcentajes (= 100%).
-  const ventasBase = catSigned('ventas', valores);
-  const money=v=>{ const neg=v<0; return `<span class="mono ${neg?'neg':''}">${fmtARS(v)}</span>`; };
+  // En USD, precomputo el valor convertido por CLAVE de fila:
+  //  - período puntual: valor / TC del período
+  //  - acumulado: suma de (valor mensual / TC de ese mes) sobre los períodos
+  // Para acumulado necesito recomputar por período; armo un mapa key→USD.
+  let usdByKey=null, tcPeriodo=null, sinTc=false;
+  if(usd){
+    if(gSel==='acumulado'){
+      usdByKey = gAccumUsdMap();       // {catKey/formulaKey/cuenta: montoUSD}
+    }else{
+      tcPeriodo = gCurrentTc();
+      sinTc = !tcPeriodo;
+    }
+  }
+
+  if(sub) sub.textContent = (gSel==='acumulado'?'Acumulado del ejercicio':(gScope().periodo?gScope().periodo.etiqueta:''))+' · importes en '+monLabel;
+  const meta=document.getElementById('g-print-meta'); if(meta) meta.textContent = (gSel==='acumulado'?'Acumulado del ejercicio':(gScope().periodo?gScope().periodo.etiqueta:''))+(usd?' · USD':'');
+
+  const ventasBase = catSigned('ventas', valores);   // pesos, base del %
+  // Conversor: devuelve USD (o null si falta TC). key opcional para acumulado.
+  const cv = (v, key) => {
+    if(!usd) return v;
+    if(gSel==='acumulado') return (usdByKey && key in usdByKey) ? usdByKey[key] : null;
+    return tcPeriodo ? v/tcPeriodo : null;
+  };
+  const money=v=>{ if(usd && v==null) return '<span class="mono">—</span>'; const neg=v<0; return `<span class="mono ${neg?'neg':''}">${usd?fmtUSD(v):fmtARS(v)}</span>`; };
   const pctCell=v=>{ const r = (ventasBase && isFinite(ventasBase) && ventasBase!==0) ? v/ventasBase : NaN;
                      const txt = isFinite(r) ? _nfPct.format(r) : '—';
                      return `<td class="mono g-pct ${r<0?'neg':''}">${txt}</td>`; };
-  let html='';
+  // aviso si falta TC en período puntual
+  if(sinTc){
+    tb.innerHTML=`<tr class="g-tcrow"><td>Tipo de cambio del mes</td><td colspan="2">
+      <input class="g-tc-input" inputmode="decimal" autocomplete="off" placeholder="cargá el TC"
+        onfocus="gTcFocus(this)" onblur="gTcBlur(this)"></td></tr>
+      <tr><td colspan="3" style="text-align:center;color:var(--ink-faint);padding:28px">Cargá el <b>tipo de cambio</b> de este mes para ver el informe en dólares. Se sincroniza automáticamente con Presupuesto.</td></tr>`;
+    document.getElementById('g-periodo').disabled=false;
+    return;
+  }
+  // fila de TC (editable) cuando hay período puntual — permite cargar/ajustar el dólar
+  let tcRow='';
+  if(gSel!=='acumulado'){
+    const tcNow=gCurrentTc();
+    tcRow=`<tr class="g-tcrow"><td><span class="g-tc-label">Tipo de cambio del mes</span></td>
+      <td><input class="g-tc-input" inputmode="decimal" autocomplete="off" placeholder="$ 0"
+        value="${tcNow?nf0.format(tcNow):''}" onfocus="gTcFocus(this)" onblur="gTcBlur(this)"></td><td></td></tr>`;
+  }
+  let html=tcRow;
   for(const it of G_LAYOUT){
     if(it.t==='space'){ html+='<tr class="g-space"><td colspan="3"></td></tr>'; continue; }
     if(it.t==='cat'){
       const c=G_CAT_BY_KEY[it.key], val=catSigned(it.key,valores);
       html+=`<tr class="g-cat" onclick="openGCatModal('${it.key}')" title="Cargar / editar">
-        <td><span class="g-chev">▸</span>${c.label}</td><td>${money(val)}</td>${pctCell(val)}</tr>`;
+        <td><span class="g-chev">▸</span>${c.label}</td><td>${money(cv(val,it.key))}</td>${pctCell(val)}</tr>`;
     } else if(it.t==='formula'){
-      html+=`<tr class="g-formula g-${it.tone}"><td>${it.label}</td><td>${money(f[it.key])}</td>${pctCell(f[it.key])}</tr>`;
+      html+=`<tr class="g-formula g-${it.tone}"><td>${it.label}</td><td>${money(cv(f[it.key],it.key))}</td>${pctCell(f[it.key])}</tr>`;
     } else if(it.t==='calc'){
-      html+=`<tr class="g-row-ind"><td>${it.label} <span class="g-tag">−30% s/ Utilidad Neta</span></td><td>${money(f.impuesto_ganancias)}</td>${pctCell(f.impuesto_ganancias)}</tr>`;
+      html+=`<tr class="g-row-ind"><td>${it.label} <span class="g-tag">−30% s/ Utilidad Neta</span></td><td>${money(cv(f.impuesto_ganancias,'impuesto_ganancias'))}</td>${pctCell(f.impuesto_ganancias)}</tr>`;
     } else if(it.t==='taxblock'){
       html+=G_TAX.map(a=>`<tr class="g-row-ind g-click" onclick="openGCatModal('tax')" title="Cargar / editar">
-        <td style="padding-left:30px">${a.n}</td><td>${money(gv(valores,a.c))}</td>${pctCell(gv(valores,a.c))}</tr>`).join('');
+        <td style="padding-left:30px">${a.n}</td><td>${money(cv(gv(valores,a.c),'cuenta:'+a.c))}</td>${pctCell(gv(valores,a.c))}</tr>`).join('');
     }
   }
   tb.innerHTML=html;
@@ -321,6 +441,9 @@ function renderGestionComparativa(){
 
   if(sub) sub.textContent = `Comparativa mensual · ${N} período${N===1?'':'s'} · importes en ARS`;
   if(meta) meta.textContent = `Comparativa mensual · ${N} período${N===1?'':'s'}`;
+  // La comparativa mensual se muestra siempre en pesos (cada mes ya es su
+  // propia columna). El toggle USD aplica a la vista "Por período".
+  const gm=document.getElementById('g-moneda'); if(gm) gm.style.opacity = gIsUsd()?'0.5':'1';
 
   // Construir <thead>: Concepto + cada período + Acumulado + Promedio + % Acumulado + % Promedio
   const headPeriodos = periodos.map(p=>`<th>${etiquetaCorta(p)}</th>`).join('');
@@ -439,6 +562,16 @@ function setGVista(v){
   gVista = v;
   renderGestion();
 }
+
+/* Toggle de moneda (ARS / USD) */
+function setGMoneda(m){
+  if(m!=='ars' && m!=='usd') return;
+  gMoneda = m;
+  const ca=document.getElementById('g-cur-ars'), cu=document.getElementById('g-cur-usd');
+  if(ca&&cu){ ca.classList.toggle('on',m==='ars'); cu.classList.toggle('on',m==='usd'); }
+  renderGestion();
+}
+window.setGMoneda=setGMoneda;
 
 /* =====================================================================
    MODAL DE CARGA POR CATEGORÍA (o créditos de ganancias)

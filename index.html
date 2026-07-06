@@ -112,6 +112,8 @@
           <button class="seg" data-vista="comparativa" onclick="setGVista('comparativa')">Comparativa mensual</button>
         </div>
         <div class="field no-print" id="g-periodo-field"><label>Período</label><select id="g-periodo"></select></div>
+        <div class="field no-print"><label>Moneda</label>
+          <div class="seg" id="g-moneda"><button class="on" onclick="setGMoneda('ars')" id="g-cur-ars">ARS $</button><button onclick="setGMoneda('usd')" id="g-cur-usd">USD</button></div></div>
         <div class="field no-print"><label>&nbsp;</label><div style="display:flex;gap:8px">
           <button class="btn" onclick="openGNewPeriod()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>Período</button>
           <button class="btn gray sm" onclick="exportGestion()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Excel</button>

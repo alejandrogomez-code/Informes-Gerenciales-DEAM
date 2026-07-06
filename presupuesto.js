@@ -200,8 +200,9 @@ function prRefAcumVal(name){
   return prEval(name, n=>{ const id=bn[n]?bn[n].id:null; const r=id?rm[id]:null; return r?Number(r.accumulated||0):0; }, {});
 }
 function prRefPromVal(name){
-  const bn=prByName(), rm=prRefMap();
-  return prEval(name, n=>{ const id=bn[n]?bn[n].id:null; const r=id?rm[id]:null; return r?Number(r.average||0):0; }, {});
+  /* Promedio de referencia = acumulado ÷ 12 (coherente con la vista
+     Referencia 25/26, donde sólo se carga el acumulado). */
+  return prRefAcumVal(name)/12;
 }
 function prRefPct(name){
   const ventas=prRefAcumVal("Total de Ventas");

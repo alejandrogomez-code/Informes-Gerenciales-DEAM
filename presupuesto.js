@@ -20,7 +20,7 @@
 /* ---------- Categorías calculadas (fórmulas del Estado de Resultados) ---------- */
 const PR_SUB3_PARTS = ["Sueldo y Cargas Sociales","Gastos de Personal","Honorarios","Impuestos",
   "Gastos Bancarios","Intereses pagados","Gastos de oficina","Servicios","Sistemas",
-  "Viajes y Viáticos","Marketing","Gastos de Bienes de Uso","Otros gastos operativos"];
+  "Viajes y Viáticos","Marketing","Gastos de Bienes de Uso","Amortizaciones","Inflación","Otros gastos operativos"];
 const PR_TAX_PARTS = ["Impuestos a las ganancias","Percepción Ganancia aduana","Anticipo Impuesto a las ganancias",
   "Imp. créditos y débitos","Percepción Ganancias","Retención Impuestos a las ganancias"];
 const PR_FORMULAS = {
@@ -39,6 +39,52 @@ const PR_HILITE = {
   "Total de Impuestos a las ganancias":"hi-sub","Resultado después del impuesto":"hi-key",
 };
 const PR_TYPE_COLOR = { ingreso:"#017E84", egreso:"#9a6b00", impuesto:"#7c3aed", resultado:"#4A2C40" };
+
+/* ---------------------------------------------------------------------
+   PUENTE Informe de Gestión → Presupuesto (ejercicio actual)
+   Cada período de Gestión (gestion_periodos) tiene una fecha (mes del
+   informe) y valores por cuenta contable. Acá se agrupan esas cuentas en
+   las categorías del Presupuesto y se vuelca cada período al mes que le
+   corresponde del ejercicio actual (2026/2027), sobrescribiendo siempre.
+   Impuestos quedan fuera. Amortizaciones e Inflación se mapean a las
+   categorías nuevas homónimas.
+   El mapeo es por CLAVE de categoría de Gestión (G_CATEGORIAS[].key) →
+   NOMBRE de categoría de Presupuesto. Las cuentas de cada categoría de
+   Gestión están en G_CAT_BY_KEY (definido en gestion.js).
+--------------------------------------------------------------------- */
+const PR_GESTION_MAP = {
+  ventas:           "Total de Ventas",
+  cmv:              "Costo de Mercadería Vendida",
+  cmv_ind:          "Costo de Mercadería Vendida Indirecta",
+  ingenieria:       "Gastos de Ingeniería",
+  comercializacion: "Gastos de comercialización",
+  otros_ingresos:   "Total de otros ingresos",
+  rxt:              "Total Resultado por Tenencia",
+  sueldos:          "Sueldo y Cargas Sociales",
+  gastos_personal:  "Gastos de Personal",
+  honorarios:       "Honorarios",
+  impuestos:        "Impuestos",
+  gastos_bancarios: "Gastos Bancarios",
+  intereses:        "Intereses pagados",
+  gastos_oficina:   "Gastos de oficina",
+  servicios:        "Servicios",
+  sistemas:         "Sistemas",
+  viajes:           "Viajes y Viáticos",
+  marketing:        "Marketing",
+  bienes_uso:       "Gastos de Bienes de Uso",
+  amortizaciones:   "Amortizaciones",
+  inflacion:        "Inflación",
+  otros_gastos_op:  "Otros gastos operativos",
+  // 'tax'/impuestos a las ganancias: fuera del volcado (a pedido).
+};
+
+/* Suma las cuentas de una categoría de Gestión a partir de su objeto de
+   valores {cuenta:monto}. Reutiliza G_CAT_BY_KEY de gestion.js. */
+function prGestionCatTotal(gkey, valores){
+  const cat = (typeof G_CAT_BY_KEY!=='undefined') ? G_CAT_BY_KEY[gkey] : null;
+  if(!cat) return 0;
+  return cat.cuentas.reduce((a,x)=> a + (+valores[x.c]||0), 0);
+}
 
 /* Evaluar un valor por nombre resolviendo fórmulas recursivamente. */
 function prEval(name, getLeaf, memo){
@@ -236,6 +282,7 @@ function renderPresupuesto(){
   }
 
   if(PR.view==='grid')      prRenderGrid(host);
+  else if(PR.view==='ref')  prRenderReference(host);
   else if(PR.view==='compare') prRenderCompare(host);
   else if(PR.view==='graphs')  prRenderGraphs(host);
 }
@@ -272,6 +319,8 @@ function prRenderGrid(host){
   const dirtyCount = Object.keys(PR.gridDirty).length;
 
   const fyOptions = PR.fiscalYears.map(f=>`<option value="${f.id}" ${f.id===fyId?'selected':''}>${f.name}${f.is_reference?' (ref.)':''}</option>`).join('');
+  const isCur = !(PR.fiscalYears.find(f=>f.id===fyId)||{}).is_reference;
+  const syncBtn = isCur ? `<button class="btn gray" onclick="prSyncNow()" title="Traer los valores del Informe de Gestión para este ejercicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 8a8 8 0 0 0-14-3M4 16a8 8 0 0 0 14 3"/></svg>Sincronizar desde Gestión</button>` : '';
 
   let rows='';
   for(const cat of PR.categories){
@@ -323,9 +372,11 @@ function prRenderGrid(host){
       <div class="field"><label>Ejercicio a cargar</label>
         <select onchange="prSetGridFy(this.value)">${fyOptions}</select></div>
       <div class="cp-spacer"></div>
+      ${syncBtn}
       <button class="btn ${dirtyCount?'':'gray'}" onclick="prSaveGrid()" ${dirtyCount?'':'disabled'}>
         ${dirtyCount?`Guardar cambios (${dirtyCount})`:'Sin cambios'}</button>
     </div>
+    ${isCur?'<div class="note no-print"><span>🔗</span><div>Los valores de este ejercicio se toman del <b>Informe de Gestión</b> del mismo período (se sobrescriben al guardar Gestión o al sincronizar). Impuestos a las ganancias quedan fuera y se cargan a mano.</div></div>':''}
     <div class="panel">
       <div class="panel-head"><h3>Carga mensual</h3><div class="cp-spacer"></div>
         <span style="font-size:11.5px;color:var(--ink-faint)">a la derecha: acumulado, promedio y % s/ventas</span></div>
@@ -618,13 +669,204 @@ function prSetGAcum(a){ PR.gAcum=!!a; renderPresupuesto(); }
 function prSetGPick(p){ PR.gPick=p; renderPresupuesto(); }
 
 /* =====================================================================
-   EXPORTS GLOBALES + INIT
+   VISTA · REFERENCIA 2025/2026 (solo acumulado)
+   Se carga únicamente la columna de acumulado por categoría. El promedio
+   se calcula como acumulado ÷ 12 y el % s/ventas como acumulado ÷ ventas
+   acumuladas. No se muestra mes a mes. Plantilla Excel + import.
    ===================================================================== */
+function prRefFy(){ return PR.fiscalYears.find(f=>f.is_reference); }
+
+function prRenderReference(host){
+  const fy = prRefFy();
+  if(!fy){ host.innerHTML='<div class="placeholder"><h2>Sin ejercicio de referencia</h2><p>Creá un ejercicio con <b>is_reference = true</b> (por defecto, 2025/2026).</p></div>'; return; }
+  const bn = prByName();
+  const rm = prRefMap();
+  const acumOf = name => prEval(name, n=>{ const id=bn[n]?bn[n].id:null; const r=id?rm[id]:null; return r?Number(r.accumulated||0):0; }, {});
+  const ventasAcum = acumOf("Total de Ventas");
+
+  let rows='';
+  for(const cat of PR.categories){
+    const calc = prIsCalc(cat.name);
+    const hi = PR_HILITE[cat.name]||'';
+    const bar=`<span class="pr-typebar" style="background:${PR_TYPE_COLOR[cat.type]||'#999'}"></span>`;
+    const acum = acumOf(cat.name);
+    const prom = acum/12;
+    const pc   = ventasAcum!==0 ? (acum/ventasAcum)*100 : null;
+    const acumCell = calc
+      ? `<span class="pr-cattot">${prMoney(acum,false)}</span>`
+      : `<input class="pr-cell" inputmode="decimal" autocomplete="off" placeholder="$ 0"
+           value="${(rm[cat.id]&&rm[cat.id].accumulated!=null)?nf0.format(Number(rm[cat.id].accumulated)):''}"
+           onfocus="prRefFocus(this)" onblur="prRefBlur(this)" data-c="${cat.id}">`;
+    rows += `<tr class="${hi}"><td class="left pr-sticky"><div class="pr-catcell">${bar}<span class="pr-catname ${hi==='hi-key'?'strong':''}">${cat.name}</span>${calc?'<span class="pr-badge">calc</span>':''}</div></td>
+      <td class="pr-num">${acumCell}</td>
+      <td class="pr-num pr-sum">${prMoney(prom,false)}</td>
+      <td class="pr-num pr-sum pct">${prPct(pc)}</td></tr>`;
+  }
+
+  host.innerHTML = `
+    <div class="controls no-print">
+      <div class="field"><label>Ejercicio de referencia</label>
+        <select disabled><option>${fy.name}</option></select></div>
+      <div class="cp-spacer"></div>
+      <button class="btn gray" onclick="prRefTemplate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Plantilla</button>
+      <button class="btn gray" onclick="prRefTriggerImport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg>Importar</button>
+      <input type="file" id="pr-ref-file" accept=".xlsx,.xls" style="display:none" onchange="prRefOnFile(this)">
+    </div>
+    <div class="note no-print"><span>📌</span><div><b>Referencia ${fy.name}.</b> Cargá únicamente el <b>acumulado</b> del ejercicio por categoría. El promedio se calcula como acumulado ÷ 12 y el % sobre ventas como acumulado ÷ ventas acumuladas. Podés bajar la plantilla, completarla en Excel e importarla.</div></div>
+    <div class="panel">
+      <div class="panel-head"><h3>Acumulado por categoría · ${fy.name}</h3></div>
+      <table class="pr-table">
+        <thead><tr><th class="left pr-sticky">Categoría</th><th>Acumulado total</th><th class="pr-sum">Promedio (÷12)</th><th class="pr-sum">% s/ventas</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function prRefFocus(inp){
+  const c=inp.dataset.c; const rm=prRefMap();
+  const cur=(rm[c]&&rm[c].accumulated!=null)?Number(rm[c].accumulated):'';
+  inp.value = cur!==''?String(cur):''; inp.select();
+}
+async function prRefBlur(inp){
+  const fy=prRefFy(); if(!fy) return;
+  const c=inp.dataset.c; const num=parseNum(inp.value);
+  const newVal = (inp.value.trim()===''||isNaN(num)) ? null : num;
+  let ref = PR.referenceValues.find(r=>r.fiscal_year_id===fy.id && r.category_id===c);
+  const prev = ref&&ref.accumulated!=null?Number(ref.accumulated):null;
+  if(newVal===prev){ renderPresupuesto(); return; }
+  if(!db){ alert('Conectá Supabase para guardar.'); renderPresupuesto(); return; }
+  try{
+    const r=await db.from('reference_values').upsert(
+      {fiscal_year_id:fy.id, category_id:c, accumulated:newVal},
+      {onConflict:'fiscal_year_id,category_id'});
+    if(r.error) throw r.error;
+  }catch(e){ alert('No se pudo guardar: '+(e.message||e)); return; }
+  await loadPresupuesto();
+}
+
+function prRefTemplate(){
+  if(typeof XLSX==='undefined'){ alert('No se pudo cargar la librería de Excel.'); return; }
+  const fy=prRefFy(); const rm=prRefMap();
+  const aoa=[['DEAM SRL — Presupuesto · Plantilla de Referencia'],[fy?fy.name:''],[],['Categoría','Acumulado total']];
+  PR.categories.forEach(c=>{ if(!prIsCalc(c.name)){ const cur=rm[c.id]&&rm[c.id].accumulated!=null?Number(rm[c.id].accumulated):''; aoa.push([c.name, cur]); } });
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:38},{wch:20}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Referencia');
+  XLSX.writeFile(wb, `DEAM_Presupuesto_Referencia_${fy?fy.name.replace('/','-'):''}.xlsx`);
+}
+
+function prRefTriggerImport(){ document.getElementById('pr-ref-file').click(); }
+function prRefOnFile(inputEl){
+  const file=inputEl.files&&inputEl.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+      await prRefImport(aoa);
+    }catch(err){ console.warn('ref import',err); alert('No se pudo leer el archivo. Usá la plantilla exportada por este informe.'); }
+    finally{ inputEl.value=''; }
+  };
+  reader.readAsArrayBuffer(file);
+}
+async function prRefImport(aoa){
+  const fy=prRefFy(); if(!fy){ alert('Sin ejercicio de referencia.'); return; }
+  const norm=s=>String(s||'').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+  const byNorm={}; PR.categories.forEach(c=>{ if(!prIsCalc(c.name)) byNorm[norm(c.name)]=c; });
+  const rows=[]; let matched=0;
+  for(const r of aoa){
+    if(!r||r.length<2) continue;
+    const cat=byNorm[norm(r[0])]; if(!cat) continue;
+    matched++;
+    const cell=r[1];
+    if(cell===null||cell===undefined||cell===''){ rows.push({fiscal_year_id:fy.id,category_id:cat.id,accumulated:null}); continue; }
+    const v=parseNum(cell); if(!isFinite(v)) continue;
+    rows.push({fiscal_year_id:fy.id,category_id:cat.id,accumulated:v});
+  }
+  if(matched===0){ alert('No se reconoció ninguna categoría en el archivo. Descargá la plantilla para ver el formato.'); return; }
+  if(!confirm(`Se importarán ${rows.length} categorías de referencia (${fy.name}). Se sobrescribe el acumulado existente. ¿Continuar?`)) return;
+  if(!db){ alert('Conectá Supabase para guardar.'); return; }
+  try{
+    const r=await db.from('reference_values').upsert(rows,{onConflict:'fiscal_year_id,category_id'});
+    if(r.error) throw r.error;
+  }catch(e){ alert('No se pudo importar: '+(e.message||e)); return; }
+  await loadPresupuesto();
+  alert('Referencia importada.');
+}
+
+/* =====================================================================
+   SINCRONIZACIÓN Gestión → Presupuesto (ejercicio actual)
+   ===================================================================== */
+/* Lee los períodos de Gestión (gestion_periodos) y sobrescribe, en el
+   ejercicio actual, el valor de cada categoría mapeada, en el mes que
+   corresponde a la fecha del período. Devuelve la cantidad de celdas
+   escritas. Si onlyLocal=true, no toca la base (para el auto-refresh de
+   render); normalmente persiste con upsert. */
+async function prSyncFromGestion(opts){
+  opts = opts || {};
+  if(!db){ return 0; }
+  // ejercicio actual = el no-referencia
+  const curFy = PR.fiscalYears.find(f=>!f.is_reference);
+  if(!curFy){ return 0; }
+
+  // traer períodos de Gestión
+  let periodos=[];
+  try{
+    const r = await db.from('gestion_periodos').select('*');
+    if(r.error) throw r.error;
+    periodos = r.data||[];
+  }catch(e){ console.warn('sync: no se pudo leer gestion_periodos', e); return 0; }
+  if(!periodos.length) return 0;
+
+  const bn = prByName();
+  const monthsCur = prMonthsOf(curFy.id);
+  // índice mes por (mes calendario + año) → month row
+  const monthByYM = {};
+  monthsCur.forEach(m=>{ monthByYM[`${m.calendar_year}-${m.month_number}`]=m; });
+
+  const rows=[];
+  for(const p of periodos){
+    if(!p.fecha) continue;
+    const d = new Date(p.fecha+'T00:00:00');
+    const ym = `${d.getFullYear()}-${d.getMonth()+1}`;
+    const month = monthByYM[ym];
+    if(!month) continue;                    // ese mes no cae en el ejercicio actual
+    const valores = p.valores||{};
+    for(const gkey of Object.keys(PR_GESTION_MAP)){
+      const catName = PR_GESTION_MAP[gkey];
+      const cat = bn[catName];
+      if(!cat) continue;                     // categoría no existe en Presupuesto
+      const monto = prGestionCatTotal(gkey, valores);
+      rows.push({ fiscal_year_id:curFy.id, month_id:month.id, category_id:cat.id,
+                  subcategory_id:null, amount: monto });
+    }
+  }
+  if(!rows.length) return 0;
+
+  // sobrescribe siempre (importe directo, subcategory_id null)
+  try{
+    const r = await db.from('monthly_values').upsert(rows, {onConflict:'month_id,category_id,subcategory_id'});
+    if(r.error) throw r.error;
+  }catch(e){ console.warn('sync upsert', e); if(!opts.silent) alert('No se pudo sincronizar desde Gestión: '+(e.message||e)); return 0; }
+  return rows.length;
+}
+
+/* Botón manual desde la grilla del ejercicio actual */
+async function prSyncNow(){
+  const n = await prSyncFromGestion({});
+  await loadPresupuesto();
+  alert(n>0 ? `Sincronizado desde Gestión: ${n} valores actualizados en el ejercicio actual.` : 'No se encontraron períodos de Gestión que caigan en el ejercicio actual.');
+}
+
+
 window.prSetView=prSetView; window.prSetCurrency=prSetCurrency;
 window.prCellFocus=prCellFocus; window.prCellBlur=prCellBlur;
 window.prSetGridFy=prSetGridFy; window.prSaveGrid=prSaveGrid; window.prAddSub=prAddSub;
 window.prSetOrder=prSetOrder; window.prSetMetric=prSetMetric; window.prSetFilter=prSetFilter;
 window.prExportCompare=prExportCompare;
 window.prSetGMode=prSetGMode; window.prSetGAcum=prSetGAcum; window.prSetGPick=prSetGPick;
+window.prRefFocus=prRefFocus; window.prRefBlur=prRefBlur;
+window.prRefTemplate=prRefTemplate; window.prRefTriggerImport=prRefTriggerImport; window.prRefOnFile=prRefOnFile;
+window.prSyncNow=prSyncNow; window.prSyncFromGestion=prSyncFromGestion;
 
 setTimeout(loadPresupuesto, 70);

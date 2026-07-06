@@ -513,3 +513,10 @@
   .pr-table{font-size:9px} .pr-table th,.pr-table td{padding:2.5px 6px}
   .pr-table thead th{font-size:8px;position:static} .pr-table .pr-sticky{position:static;min-width:0}
 }
+
+/* Fila de tipo de cambio en la grilla de Presupuesto */
+.pr-tcrow td{background:#f3f7f6;border-bottom:1.5px solid var(--teal-soft)}
+.pr-tcrow .pr-sticky{background:#e9f2f0}
+.pr-tclabel{font-weight:700;color:var(--teal);font-size:12px}
+.pr-cell.pr-tc{color:var(--teal);font-weight:700}
+.pr-cell.pr-tc::placeholder{color:#9fc4bd;font-weight:400}

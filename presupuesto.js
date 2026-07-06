@@ -213,8 +213,16 @@ function prRefPct(name){
   if(r && r.pct_sales!=null) return Number(r.pct_sales);
   return ventas!==0 ? (prRefAcumVal(name)/ventas)*100 : null;
 }
-function prCRefAcum(name){ const v=prRefAcumVal(name); if(!prIsUsd()) return v; const a=prAvgRate(PR.refFyId); return a?v/a:0; }
-function prCRefProm(name){ const v=prRefPromVal(name); if(!prIsUsd()) return v; const a=prAvgRate(PR.refFyId); return a?v/a:0; }
+/* TC único del ejercicio de referencia: se guarda en el usd_rate del
+   último mes (order_index 12 = marzo). Representa el cierre de ejercicio
+   (ej. 31/03/2026) con el que se convierte todo el acumulado a USD. */
+function prRefRate(){
+  const fy=prRefFy(); if(!fy) return null;
+  const m=PR.months.find(x=>x.fiscal_year_id===fy.id && x.order_index===12);
+  return (m && m.usd_rate) ? Number(m.usd_rate) : null;
+}
+function prCRefAcum(name){ const v=prRefAcumVal(name); if(!prIsUsd()) return v; const a=prRefRate(); return a?v/a:0; }
+function prCRefProm(name){ const v=prRefPromVal(name); if(!prIsUsd()) return v; const a=prRefRate(); return a?v/a:0; }
 
 /* ---------- Formato ---------- */
 const prMoney = (n,usd)=> (n==null||isNaN(n)||!isFinite(n)) ? '—' : (usd?fmtUSD(n):fmtARS(n));
@@ -740,6 +748,9 @@ function prRenderReference(host){
   const rm = prRefMap();
   const acumOf = name => prEval(name, n=>{ const id=bn[n]?bn[n].id:null; const r=id?rm[id]:null; return r?Number(r.accumulated||0):0; }, {});
   const ventasAcum = acumOf("Total de Ventas");
+  const usd = prIsUsd();
+  const tc = prRefRate();                 // TC único (usd_rate del mes 12 de la referencia)
+  const toUsd = v => (tc && tc>0) ? v/tc : null;
 
   let rows='';
   for(const cat of PR.categories){
@@ -754,29 +765,54 @@ function prRenderReference(host){
       : `<input class="pr-cell" inputmode="decimal" autocomplete="off" placeholder="$ 0"
            value="${(rm[cat.id]&&rm[cat.id].accumulated!=null)?nf0.format(Number(rm[cat.id].accumulated)):''}"
            onfocus="prRefFocus(this)" onblur="prRefBlur(this)" data-c="${cat.id}">`;
+    const usdCol = usd ? `<td class="pr-num pr-sum">${tc?prMoney(toUsd(acum),true):'—'}</td>` : '';
     rows += `<tr class="${hi}"><td class="left pr-sticky"><div class="pr-catcell">${bar}<span class="pr-catname ${hi==='hi-key'?'strong':''}">${cat.name}</span>${calc?'<span class="pr-badge">calc</span>':''}</div></td>
-      <td class="pr-num">${acumCell}</td>
+      <td class="pr-num">${acumCell}</td>${usdCol}
       <td class="pr-num pr-sum">${prMoney(prom,false)}</td>
       <td class="pr-num pr-sum pct">${prPct(pc)}</td></tr>`;
   }
 
+  const usdHead = usd ? '<th class="pr-sum">Acum. USD</th>' : '';
+  const tcVal = tc?nf0.format(tc):'';
   host.innerHTML = `
     <div class="controls no-print">
       <div class="field"><label>Ejercicio de referencia</label>
         <select disabled><option>${fy.name}</option></select></div>
+      <div class="field"><label>Tipo de cambio (31/03/2026)</label>
+        <input class="pr-refcambio" inputmode="decimal" autocomplete="off" placeholder="$ 0"
+          value="${tcVal}" onfocus="prRefRateFocus(this)" onblur="prRefRateBlur(this)"></div>
       <div class="cp-spacer"></div>
       <button class="btn gray" onclick="prRefTemplate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Plantilla</button>
       <button class="btn gray" onclick="prRefTriggerImport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg>Importar</button>
       <input type="file" id="pr-ref-file" accept=".xlsx,.xls" style="display:none" onchange="prRefOnFile(this)">
     </div>
-    <div class="note no-print"><span>📌</span><div><b>Referencia ${fy.name}.</b> Cargá únicamente el <b>acumulado</b> del ejercicio por categoría. El promedio se calcula como acumulado ÷ 12 y el % sobre ventas como acumulado ÷ ventas acumuladas. Podés bajar la plantilla, completarla en Excel e importarla.</div></div>
+    <div class="note no-print"><span>📌</span><div><b>Referencia ${fy.name}.</b> Cargá el <b>acumulado</b> del ejercicio por categoría. El promedio se calcula como acumulado ÷ 12 y el % sobre ventas como acumulado ÷ ventas acumuladas. El <b>tipo de cambio de cierre</b> convierte todo el acumulado a dólares para comparar.</div></div>
     <div class="panel">
       <div class="panel-head"><h3>Acumulado por categoría · ${fy.name}</h3></div>
       <table class="pr-table">
-        <thead><tr><th class="left pr-sticky">Categoría</th><th>Acumulado total</th><th class="pr-sum">Promedio (÷12)</th><th class="pr-sum">% s/ventas</th></tr></thead>
+        <thead><tr><th class="left pr-sticky">Categoría</th><th>Acumulado total</th>${usdHead}<th class="pr-sum">Promedio (÷12)</th><th class="pr-sum">% s/ventas</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
+}
+
+/* Edición del TC único de referencia (persiste en months.usd_rate del mes 12) */
+function prRefRateFocus(inp){ const tc=prRefRate(); inp.value = tc?String(tc):''; inp.select(); }
+async function prRefRateBlur(inp){
+  const fy=prRefFy(); if(!fy) return;
+  const m=PR.months.find(x=>x.fiscal_year_id===fy.id && x.order_index===12);
+  if(!m){ alert('No se encontró el mes de cierre (marzo) del ejercicio de referencia.'); return; }
+  const val=inp.value.trim(); const num=parseNum(val);
+  const newVal=(val===''||isNaN(num)||num<=0)?null:num;
+  const prev=(m.usd_rate!=null)?Number(m.usd_rate):null;
+  if(newVal===prev){ renderPresupuesto(); return; }
+  if(!db){ alert('Conectá Supabase para guardar el tipo de cambio.'); renderPresupuesto(); return; }
+  try{
+    const r=await db.from('months').update({usd_rate:newVal}).eq('id',m.id);
+    if(r.error) throw r.error;
+    m.usd_rate=newVal;
+  }catch(e){ alert('No se pudo guardar el tipo de cambio: '+(e.message||e)); return; }
+  renderPresupuesto();
 }
 
 function prRefFocus(inp){
@@ -925,6 +961,7 @@ window.prExportCompare=prExportCompare;
 window.prSetGMode=prSetGMode; window.prSetGAcum=prSetGAcum; window.prSetGPick=prSetGPick;
 window.prRefFocus=prRefFocus; window.prRefBlur=prRefBlur;
 window.prRefTemplate=prRefTemplate; window.prRefTriggerImport=prRefTriggerImport; window.prRefOnFile=prRefOnFile;
+window.prRefRateFocus=prRefRateFocus; window.prRefRateBlur=prRefRateBlur;
 window.prSyncNow=prSyncNow; window.prSyncFromGestion=prSyncFromGestion;
 
 setTimeout(loadPresupuesto, 70);

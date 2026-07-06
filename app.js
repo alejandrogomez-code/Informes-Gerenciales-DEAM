@@ -361,11 +361,16 @@ function renderBeTable(){
   if(!sorted.length){ tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--ink-faint);padding:30px">Sin períodos. Usá <b>Cargar</b> para agregar el primero.</td></tr>'; renderBeChart(); return; }
   tbody.innerHTML=sorted.map(r=>{
     const k=beCalc(r), msCls=k.ms>=0.25?'s-ok':k.ms>=0?'s-warn':'s-bad';
-    return `<tr><td>${fechaCorta(r.fecha)}</td><td class="mono">$ ${nf0.format(r.tc)}</td><td class="mono">${fmtUSD(k.vUsd)}</td>
+    const rev = (typeof revIsFecha==='function') && revIsFecha(r.fecha);
+    const d=new Date(r.fecha+'T00:00'); const anio=d.getFullYear(), mes=d.getMonth()+1;
+    const badge = rev ? (typeof REV_BADGE!=='undefined'?REV_BADGE:'') : '';
+    const revBtn = `<button class="row-act" onclick="revToggle(${anio},${mes})" title="${rev?'Quitar marca de revisión':'Marcar mes en revisión'}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${rev?'#d99b1c':'currentColor'}" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>`;
+    return `<tr class="${rev?'rev-row':''}"><td>${fechaCorta(r.fecha)}${badge}</td><td class="mono">$ ${nf0.format(r.tc)}</td><td class="mono">${fmtUSD(k.vUsd)}</td>
       <td class="mono">${fmtUSD(k.cvUsd)}</td><td class="mono">${fmtUSD(k.cfUsd)}</td>
       <td class="mono">${fmtPct(k.mc)}</td><td class="mono">${fmtUSD(k.peUsd)}</td>
       <td><span class="status ${msCls}" style="padding:2px 8px">${fmtPct(k.ms)}</span></td>
       <td class="no-print" style="white-space:nowrap">
+        ${revBtn}
         <button class="row-act" onclick="openModal('${r.id}')" title="Editar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
         <button class="row-act del" onclick="delBe('${r.id}')" title="Eliminar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
       </td></tr>`;

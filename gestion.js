@@ -481,6 +481,11 @@ async function saveGCat(){
   const r=await db.from('gestion_periodos').update({valores}).eq('id',p.id);
   if(r.error){ alert('No se pudo guardar: '+r.error.message); return; }
   p.valores=valores; closeGCatModal(); renderGestion();
+  // Sobrescribe el ejercicio actual del Presupuesto con lo cargado en Gestión.
+  if(typeof prSyncFromGestion==='function' && typeof PR!=='undefined' && PR.loaded){
+    try{ await prSyncFromGestion({silent:true}); if(typeof loadPresupuesto==='function') await loadPresupuesto(); }
+    catch(e){ console.warn('auto-sync presupuesto', e); }
+  }
 }
 
 /* =====================================================================

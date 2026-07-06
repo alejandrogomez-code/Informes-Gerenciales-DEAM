@@ -343,8 +343,11 @@ function renderGestionPorPeriodo(){
     }
   }
 
-  if(sub) sub.textContent = (gSel==='acumulado'?'Acumulado del ejercicio':(gScope().periodo?gScope().periodo.etiqueta:''))+' · importes en '+monLabel;
-  const meta=document.getElementById('g-print-meta'); if(meta) meta.textContent = (gSel==='acumulado'?'Acumulado del ejercicio':(gScope().periodo?gScope().periodo.etiqueta:''))+(usd?' · USD':'');
+  const periodoActual = (gSel!=='acumulado') ? (gScope().periodo||null) : null;
+  const revActual = periodoActual && (typeof revIsFecha==='function') && revIsFecha(periodoActual.fecha);
+  const revEtiq = revActual ? ' · <span style="color:#8a5a00;font-weight:800">En revisión</span>' : '';
+  if(sub) sub.innerHTML = (gSel==='acumulado'?'Acumulado del ejercicio':(gScope().periodo?gScope().periodo.etiqueta:''))+' · importes en '+monLabel+revEtiq;
+  const meta=document.getElementById('g-print-meta'); if(meta) meta.textContent = (gSel==='acumulado'?'Acumulado del ejercicio':(gScope().periodo?gScope().periodo.etiqueta:''))+(usd?' · USD':'')+(revActual?' · En revisión':'');
 
   const ventasBase = catSigned('ventas', valores);   // pesos, base del %
   // Conversor: devuelve USD (o null si falta TC). key opcional para acumulado.
@@ -373,6 +376,13 @@ function renderGestionPorPeriodo(){
     tcRow=`<tr class="g-tcrow"><td><span class="g-tc-label">Tipo de cambio del mes</span></td>
       <td><input class="g-tc-input" inputmode="decimal" autocomplete="off" placeholder="$ 0"
         value="${tcNow?nf0.format(tcNow):''}" onfocus="gTcFocus(this)" onblur="gTcBlur(this)"></td><td></td></tr>`;
+    // fila de estado del mes (marcar en revisión)
+    if(periodoActual){
+      const d=new Date(periodoActual.fecha+'T00:00:00'); const an=d.getFullYear(), me=d.getMonth()+1;
+      tcRow += `<tr class="g-tcrow no-print"><td><span class="g-tc-label">Estado del mes</span></td>
+        <td colspan="2"><button class="rev-toggle ${revActual?'on':''}" onclick="revToggle(${an},${me})">
+          <span class="dot"></span>${revActual?'En revisión — clic para cerrar':'Marcar en revisión'}</button></td></tr>`;
+    }
   }
   let html=tcRow;
   for(const it of G_LAYOUT){
@@ -459,7 +469,8 @@ function renderGestionComparativa(){
     : '';
 
   // Construir <thead>: Concepto + cada período + Acumulado + Promedio + % Acumulado + % Promedio
-  const headPeriodos = periodos.map(p=>`<th>${etiquetaCorta(p)}</th>`).join('');
+  const revP = periodos.map(p=> (typeof revIsFecha==='function') && revIsFecha(p.fecha));
+  const headPeriodos = periodos.map((p,i)=>`<th class="${revP[i]?'rev-col':''}">${etiquetaCorta(p)}${revP[i]?'<br><span class="rev-badge">En revisión</span>':''}</th>`).join('');
   const thead = `<thead><tr>
     <th>Concepto</th>
     ${headPeriodos}
@@ -470,10 +481,11 @@ function renderGestionComparativa(){
   </tr></thead>`;
 
   // Helper para una celda numérica (respeta la moneda; null → «—»)
-  const cell = (v, edge)=>{
-    if(usd && v==null) return `<td class="mono${edge?' g-c-edge':''}">—</td>`;
+  const cell = (v, edge, rev)=>{
+    const cls = (edge?' g-c-edge':'') + (rev?' rev-col':'');
+    if(usd && v==null) return `<td class="mono${cls}">—</td>`;
     const neg = v<0;
-    return `<td class="mono ${neg?'neg':''}${edge?' g-c-edge':''}">${usd?fmtUSD(v):fmtARS(v)}</td>`;
+    return `<td class="mono ${neg?'neg':''}${cls}">${usd?fmtUSD(v):fmtARS(v)}</td>`;
   };
   // Helper para una celda de porcentaje con razón ya calculada (ratio puede ser NaN)
   const cellRatio = (ratio, first)=>{
@@ -490,8 +502,8 @@ function renderGestionComparativa(){
 
   // Construir <tbody> reutilizando el layout
   let rows=avisoTc;
-  // valor mostrado por columna de período (convertido o no)
-  const cols = valPorP => valPorP.map((v,i)=>cell(cvP(v,i))).join('');
+  // valor mostrado por columna de período (convertido o no); marca rev-col
+  const cols = valPorP => valPorP.map((v,i)=>cell(cvP(v,i), false, revP[i])).join('');
   // acumulado y promedio en la moneda elegida
   const accShown = (valPorP, valAcARS) => usd ? cvAcum(valPorP) : valAcARS;
   const promShown = (accVal) => (accVal==null) ? null : (N>0?accVal/N:0);

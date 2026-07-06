@@ -129,6 +129,7 @@ const PR = {
   rowFilter:'all',            // all|key|ingreso|egreso|impuesto
   // grilla
   gridDirty:{},               // { "mId::cId::sId": rawString }
+  tcDirty:{},                 // { "mId": rawString } — TC de cierre pendiente de persistir
   // gráficos
   gMode:'all', gPick:PR_METRICS3[0].name, gAcum:false,
 };
@@ -335,10 +336,21 @@ function prRenderGrid(host){
     const badge = calc?'<span class="pr-badge">calc</span>':'';
     const addBtn = (!calc)?`<button class="pr-mini" title="Agregar subcategoría" onclick="prAddSub('${cat.id}','${(cat.name||'').replace(/'/g,"\\'")}')">+ sub</button>`:'';
 
+    const usd = prIsUsd();
+    const tcOf = mId => { const m=PR.months.find(x=>x.id===mId); return (m&&m.usd_rate)?Number(m.usd_rate):null; };
+    const conv = (v,mId)=>{ if(!usd) return v; const tc=tcOf(mId); return tc?v/tc:null; };
+
     let cells='';
     for(const m of mc){
       if(calc || hasSubs){
-        cells += `<td class="pr-num"><span class="pr-cattot">${prMoney(calc?valTotalLive(cat.name,m.id):catTotalLive(cat.id,m.id),false)}</span></td>`;
+        const base = calc?valTotalLive(cat.name,m.id):catTotalLive(cat.id,m.id);
+        const shown = conv(base,m.id);
+        cells += `<td class="pr-num"><span class="pr-cattot">${shown==null?'—':prMoney(shown,usd)}</span></td>`;
+      }else if(usd){
+        // en dólares: mostrar convertido, no editable (la carga es en pesos)
+        const base=parseNum(cellRaw(m.id,cat.id,''));
+        const shown=conv(base,m.id);
+        cells += `<td class="pr-num"><span class="pr-cattot">${(base&&shown!=null)?prMoney(shown,true):(base?'—':'')}</span></td>`;
       }else{
         const raw=cellRaw(m.id,cat.id,'');
         cells += `<td class="pr-num"><input class="pr-cell" inputmode="decimal" autocomplete="off" placeholder="$ 0"
@@ -347,26 +359,45 @@ function prRenderGrid(host){
           data-m="${m.id}" data-c="${cat.id}" data-s=""></td>`;
       }
     }
+    // acumulado / promedio en la moneda elegida (USD = suma de cada mes a su TC)
+    const acumShown = usd ? mc.reduce((t,m)=>{const c=conv(calc?valTotalLive(cat.name,m.id):catTotalLive(cat.id,m.id),m.id); return t+(c||0);},0) : acum;
+    const promShown = mLoaded>0 ? acumShown/mLoaded : 0;
     rows += `<tr class="pr-catrow ${hi}"><td class="left pr-sticky"><div class="pr-catcell">${bar}<span class="pr-catname ${hi==='hi-key'?'strong':''}">${cat.name}</span>${badge}${addBtn}</div></td>${cells}
-      <td class="pr-num pr-sum">${prMoney(acum,false)}</td>
-      <td class="pr-num pr-sum">${prMoney(mLoaded>0?acum/mLoaded:0,false)}</td>
+      <td class="pr-num pr-sum">${prMoney(acumShown,usd)}</td>
+      <td class="pr-num pr-sum">${prMoney(promShown,usd)}</td>
       <td class="pr-num pr-sum pct">${prPct(ventasAccum!==0?(acum/ventasAccum)*100:null)}</td></tr>`;
 
     if(!calc){
       for(const s of subs){
         let scells='';
         for(const m of mc){
-          const raw=cellRaw(m.id,cat.id,s.id);
-          scells += `<td class="pr-num"><input class="pr-cell" inputmode="decimal" autocomplete="off" placeholder="$ 0"
-            value="${raw?nf0.format(parseNum(raw)):''}"
-            onfocus="prCellFocus(this)" onblur="prCellBlur(this)"
-            data-m="${m.id}" data-c="${cat.id}" data-s="${s.id}"></td>`;
+          if(usd){
+            const base=parseNum(cellRaw(m.id,cat.id,s.id));
+            const shown=conv(base,m.id);
+            scells += `<td class="pr-num"><span class="pr-cattot">${(base&&shown!=null)?prMoney(shown,true):(base?'—':'')}</span></td>`;
+          }else{
+            const raw=cellRaw(m.id,cat.id,s.id);
+            scells += `<td class="pr-num"><input class="pr-cell" inputmode="decimal" autocomplete="off" placeholder="$ 0"
+              value="${raw?nf0.format(parseNum(raw)):''}"
+              onfocus="prCellFocus(this)" onblur="prCellBlur(this)"
+              data-m="${m.id}" data-c="${cat.id}" data-s="${s.id}"></td>`;
+          }
         }
+        const subAcumShown = usd ? mc.reduce((t,m)=>{const c=conv(parseNum(cellRaw(m.id,cat.id,s.id)),m.id); return t+(c||0);},0) : subAccum(cat.id,s.id);
         rows += `<tr class="pr-subrow"><td class="left pr-sticky"><span class="pr-subname">↳ ${s.name}</span></td>${scells}
-          <td class="pr-num pr-sum">${prMoney(subAccum(cat.id,s.id),false)}</td><td class="pr-num pr-sum"></td><td class="pr-num pr-sum"></td></tr>`;
+          <td class="pr-num pr-sum">${prMoney(subAcumShown,usd)}</td><td class="pr-num pr-sum"></td><td class="pr-num pr-sum"></td></tr>`;
       }
     }
   }
+
+  // Fila de tipo de cambio (cierre) por mes — persiste en months.usd_rate
+  const tcCells = mc.map(m=>{
+    const rate = (m.id in PR.tcDirty) ? PR.tcDirty[m.id] : (m.usd_rate!=null?String(m.usd_rate):'');
+    return `<td class="pr-num"><input class="pr-cell pr-tc" inputmode="decimal" autocomplete="off" placeholder="TC"
+      value="${rate?nf0.format(parseNum(rate)):''}"
+      onfocus="prTcFocus(this)" onblur="prTcBlur(this)" data-m="${m.id}"></td>`;
+  }).join('');
+  const tcRow = `<tr class="pr-tcrow"><td class="left pr-sticky"><span class="pr-tclabel">Tipo de cambio (cierre)</span></td>${tcCells}<td class="pr-num pr-sum"></td><td class="pr-num pr-sum"></td><td class="pr-num pr-sum"></td></tr>`;
 
   host.innerHTML = `
     <div class="controls no-print">
@@ -378,6 +409,7 @@ function prRenderGrid(host){
         ${dirtyCount?`Guardar cambios (${dirtyCount})`:'Sin cambios'}</button>
     </div>
     ${isCur?'<div class="note no-print"><span>🔗</span><div>Los valores de este ejercicio se toman del <b>Informe de Gestión</b> del mismo período (se sobrescriben al guardar Gestión o al sincronizar). Impuestos a las ganancias quedan fuera y se cargan a mano.</div></div>':''}
+    <div class="note no-print"><span>💵</span><div>Cargá el <b>tipo de cambio de cierre</b> de cada mes en la primera fila. Es lo que permite ver el informe en dólares (cada mes se convierte a su propia cotización). Se guarda solo, al salir de la celda.</div></div>
     <div class="panel">
       <div class="panel-head"><h3>Carga mensual</h3><div class="cp-spacer"></div>
         <span style="font-size:11.5px;color:var(--ink-faint)">a la derecha: acumulado, promedio y % s/ventas</span></div>
@@ -386,7 +418,7 @@ function prRenderGrid(host){
           <thead><tr><th class="left pr-sticky">Categoría / Subcategoría</th>
             ${mc.map(m=>`<th>${m.month_name.slice(0,3)} ${String(m.calendar_year).slice(2)}</th>`).join('')}
             <th class="pr-sum">Acum.</th><th class="pr-sum">Prom.</th><th class="pr-sum">% s/v</th></tr></thead>
-          <tbody>${rows}</tbody>
+          <tbody>${tcRow}${rows}</tbody>
         </table>
       </div>
     </div>`;
@@ -419,7 +451,31 @@ function prCellBlur(inp){
   renderPresupuesto();  // recalcula totales en vivo y el contador de cambios
 }
 
-function prSetGridFy(id){ PR.currentFyGrid=id; PR.gridDirty={}; renderPresupuesto(); }
+function prSetGridFy(id){ PR.currentFyGrid=id; PR.gridDirty={}; PR.tcDirty={}; renderPresupuesto(); }
+
+/* --- Tipo de cambio de cierre por mes (persiste en months.usd_rate) --- */
+function prTcFocus(inp){
+  const mId=inp.dataset.m;
+  const m=PR.months.find(x=>x.id===mId);
+  const cur=(mId in PR.tcDirty)?PR.tcDirty[mId]:(m&&m.usd_rate!=null?String(m.usd_rate):'');
+  inp.value = cur?String(parseNum(cur)):''; inp.select();
+}
+async function prTcBlur(inp){
+  const mId=inp.dataset.m;
+  const m=PR.months.find(x=>x.id===mId); if(!m) return;
+  const val=inp.value.trim(); const num=parseNum(val);
+  const newVal=(val===''||isNaN(num)||num<=0)?null:num;
+  const prev=(m.usd_rate!=null)?Number(m.usd_rate):null;
+  if(newVal===prev){ renderPresupuesto(); return; }
+  if(!db){ alert('Conectá Supabase para guardar el tipo de cambio.'); renderPresupuesto(); return; }
+  try{
+    const r=await db.from('months').update({usd_rate:newVal}).eq('id',mId);
+    if(r.error) throw r.error;
+    m.usd_rate=newVal;            // reflejar en memoria sin recargar todo
+    delete PR.tcDirty[mId];
+  }catch(e){ alert('No se pudo guardar el tipo de cambio: '+(e.message||e)); return; }
+  renderPresupuesto();
+}
 
 async function prSaveGrid(){
   if(!db){ alert('Conectá Supabase para guardar.'); return; }
@@ -863,6 +919,7 @@ async function prSyncNow(){
 window.prSetView=prSetView; window.prSetCurrency=prSetCurrency;
 window.prCellFocus=prCellFocus; window.prCellBlur=prCellBlur;
 window.prSetGridFy=prSetGridFy; window.prSaveGrid=prSaveGrid; window.prAddSub=prAddSub;
+window.prTcFocus=prTcFocus; window.prTcBlur=prTcBlur;
 window.prSetOrder=prSetOrder; window.prSetMetric=prSetMetric; window.prSetFilter=prSetFilter;
 window.prExportCompare=prExportCompare;
 window.prSetGMode=prSetGMode; window.prSetGAcum=prSetGAcum; window.prSetGPick=prSetGPick;

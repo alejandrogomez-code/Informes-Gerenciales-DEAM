@@ -53,7 +53,7 @@ async function revToggle(anio, mes){
   // re-render de los informes que estén activos
   if(typeof renderGestion==='function' && typeof gPeriodos!=='undefined') { try{ renderGestion(); }catch(_){} }
   if(typeof renderPresupuesto==='function' && typeof PR!=='undefined' && PR.loaded) { try{ renderPresupuesto(); }catch(_){} }
-  if(typeof renderEquilibrio==='function') { try{ renderEquilibrio(); }catch(_){} }
+  if(typeof renderBeTable==='function') { try{ renderBeTable(); }catch(_){} }
   return nuevo;
 }
 

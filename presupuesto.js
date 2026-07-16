@@ -496,16 +496,31 @@ async function prTcBlur(inp){
 async function prSaveGrid(){
   if(!db){ alert('Conectá Supabase para guardar.'); return; }
   const fyId = PR.currentFyGrid || PR.currentFyId;
-  const ups=[], dels=[];
+  const upsSub=[], upsDir=[], dels=[];
   for(const k of Object.keys(PR.gridDirty)){
     const [mId,cId,sId]=k.split('::');
     const raw=PR.gridDirty[k];
     if(raw==='' || isNaN(parseNum(raw))) dels.push({mId,cId,sId});
-    else ups.push({ fiscal_year_id:fyId, month_id:mId, category_id:cId, subcategory_id:sId||null, amount:parseNum(raw) });
+    else {
+      const row={ fiscal_year_id:fyId, month_id:mId, category_id:cId, subcategory_id:sId||null, amount:parseNum(raw) };
+      if(sId) upsSub.push(row); else upsDir.push(row);   // separar por tipo
+    }
   }
   try{
-    if(ups.length){
-      const r=await db.from('monthly_values').upsert(ups,{onConflict:'month_id,category_id,subcategory_id'});
+    // Con subcategoría: el upsert por onConflict funciona (no hay NULL).
+    if(upsSub.length){
+      const r=await db.from('monthly_values').upsert(upsSub,{onConflict:'month_id,category_id,subcategory_id'});
+      if(r.error) throw r.error;
+    }
+    // Importe directo (subcategory_id NULL): delete + insert, porque el upsert
+    // con NULL no reconoce la fila existente y choca contra uq_monthly_direct.
+    for(const row of upsDir){
+      const del=await db.from('monthly_values').delete()
+        .eq('month_id',row.month_id).eq('category_id',row.category_id).is('subcategory_id',null);
+      if(del.error) throw del.error;
+    }
+    if(upsDir.length){
+      const r=await db.from('monthly_values').insert(upsDir);
       if(r.error) throw r.error;
     }
     for(const d of dels){
@@ -944,11 +959,26 @@ async function prSyncFromGestion(opts){
   }
   if(!rows.length) return 0;
 
-  // sobrescribe siempre (importe directo, subcategory_id null)
+  // Sobrescribe siempre el importe directo (subcategory_id NULL). El upsert
+  // con onConflict NO funciona cuando subcategory_id es NULL (en SQL NULL≠NULL,
+  // así que Postgres no reconoce la fila existente y choca contra el índice
+  // parcial uq_monthly_direct). Por eso: borro primero las filas directas de
+  // esas categorías/meses y luego inserto.
   try{
-    const r = await db.from('monthly_values').upsert(rows, {onConflict:'month_id,category_id,subcategory_id'});
-    if(r.error) throw r.error;
-  }catch(e){ console.warn('sync upsert', e); if(!opts.silent) alert('No se pudo sincronizar desde Gestión: '+(e.message||e)); return 0; }
+    // agrupar por month_id para borrar en lote las categorías afectadas
+    const byMonth = {};
+    for(const r of rows){ (byMonth[r.month_id] = byMonth[r.month_id] || []).push(r.category_id); }
+    for(const mId of Object.keys(byMonth)){
+      const catIds = byMonth[mId];
+      const del = await db.from('monthly_values').delete()
+        .eq('month_id', mId)
+        .is('subcategory_id', null)
+        .in('category_id', catIds);
+      if(del.error) throw del.error;
+    }
+    const ins = await db.from('monthly_values').insert(rows);
+    if(ins.error) throw ins.error;
+  }catch(e){ console.warn('sync', e); if(!opts.silent) alert('No se pudo sincronizar desde Gestión: '+(e.message||e)); return 0; }
   return rows.length;
 }
 

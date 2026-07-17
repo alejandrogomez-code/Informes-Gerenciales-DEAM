@@ -69,7 +69,6 @@ const PY_LAYOUT = [
   {t:'edit', key:'i_cheques',    l:'Cheques en Cartera'},
   {t:'edit', key:'i_cobranzas',  l:'Cobranzas Proyectadas'},
   {t:'edit', key:'i_cob_futura', l:'Cob. Venta Futura'},
-  {t:'edit', key:'i_prestamos',  l:'Préstamos (varios)'},
   {t:'sub',  key:'total_ing',    l:'TOTAL INGRESOS', f:'= Σ ingresos'},
 
   {t:'section', l:'Egresos'},
@@ -78,6 +77,7 @@ const PY_LAYOUT = [
   {t:'edit', key:'e_comex',     l:'Proveedores Comex'},
   {t:'edit', key:'e_nac',       l:'Nacionalización'},
   {t:'edit', key:'e_chout',     l:'CH-OUT / Tarjetas'},
+  {t:'edit', key:'i_prestamos', l:'Préstamos (varios)'},
   {t:'sub',  key:'total_egr',   l:'TOTAL EGRESOS', f:'= Σ egresos'},
 
   {t:'section', l:'Resultado'},
@@ -86,9 +86,11 @@ const PY_LAYOUT = [
   {t:'res',  key:'saldo_acum',   l:'Saldo Acumulado', f:'= Saldo inicial + Diferencia', strong:true},
 ];
 
-/* Claves que suman en cada subtotal */
-const PY_ING_KEYS = ['i_fci','i_bancos','i_cheques','i_cobranzas','i_cob_futura','i_prestamos'];
-const PY_EGR_KEYS = ['e_prov_pp','e_sueldos','e_comex','e_nac','e_chout'];
+/* Claves que suman en cada subtotal.
+   Nota: i_prestamos conserva su clave histórica (por los datos ya cargados),
+   pero ahora suma en Egresos, no en Ingresos. */
+const PY_ING_KEYS = ['i_fci','i_bancos','i_cheques','i_cobranzas','i_cob_futura'];
+const PY_EGR_KEYS = ['e_prov_pp','e_sueldos','e_comex','e_nac','e_chout','i_prestamos'];
 
 /* Todas las claves editables (para persistir / importar) */
 const PY_EDIT_KEYS = PY_LAYOUT.filter(r=>r.t==='edit' && r.key!=='dolar').map(r=>r.key);

@@ -561,3 +561,23 @@ tr.rev-row:hover td{background:#fbf0da !important}
 .pr-revbtn.on{background:#fbe9d0;border-color:#e0b866}
 .pr-revbtn.on .dot{background:#d99b1c}
 .pr-revrow td{background:#faf9fb}
+
+/* Marca de última actualización (Proyección) */
+.py-updated{font-size:11.5px;color:var(--ink-faint);white-space:nowrap;align-self:center;
+  background:#f7f6f8;border:1px solid var(--line);border-radius:7px;padding:5px 11px}
+@media print{ .py-updated{background:none;border:none;padding:0;color:#666} }
+
+/* =====================================================================
+   Sección Análisis
+   ===================================================================== */
+.an-panel{padding:26px 32px;line-height:1.65;font-size:14px;color:var(--ink)}
+.an-panel p{margin:0 0 12px}
+.an-h{font-size:15px;font-weight:800;color:var(--aubergine-dark);margin:22px 0 10px;
+  padding-bottom:7px;border-bottom:1px solid var(--line)}
+.an-panel > .an-h:first-child{margin-top:0}
+.an-ul{margin:0 0 14px;padding-left:20px}
+.an-ul li{margin-bottom:7px}
+.an-spinner{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--aubergine);
+  border-radius:50%;animation:an-spin .8s linear infinite;margin:0 auto 6px}
+@keyframes an-spin{to{transform:rotate(360deg)}}
+@media print{ .an-panel{padding:0;font-size:11px} .an-h{font-size:12.5px;margin:14px 0 7px} }

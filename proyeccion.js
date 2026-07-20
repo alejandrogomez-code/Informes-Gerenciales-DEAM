@@ -143,6 +143,7 @@ async function loadProyeccion(){
       inflacion:+cfg.data.inflacion, iva:+cfg.data.iva, pct_costo:+cfg.data.pct_costo,
       pct_pago_ext:+cfg.data.pct_pago_ext, pct_nac:+cfg.data.pct_nac,
     } : {...PY_DEFAULTS};
+    pyUpdatedAt = cfg.data ? (cfg.data.updated_at||null) : null;
 
     pyVals = {};
     (val.data||[]).forEach(r=>{
@@ -248,6 +249,7 @@ function renderProyeccion(){
   /* --- subtítulo / TC pill --- */
   const sub=document.getElementById('py-sub');
   if(sub) sub.textContent = `Flujo de caja · ${PY_MESES} meses · valores en ${pyMoneda==='usd'?'USD':'ARS ($)'}`;
+  pyRenderUpdated();
 
   /* --- toggle moneda --- */
   document.querySelectorAll('#py-moneda button').forEach(b=>b.classList.toggle('on', b.dataset.moneda===pyMoneda));
@@ -393,11 +395,44 @@ function pyEditCell(key, m){
 /* =====================================================================
    PERSISTENCIA
    ===================================================================== */
+/* Marca de última actualización (fecha y hora del último guardado).
+   Se guarda en proyeccion_config.updated_at del escenario activo. */
+let pyUpdatedAt = null;
+
+async function pyTouch(){
+  pyUpdatedAt = new Date().toISOString();
+  pyRenderUpdated();                       // refresco inmediato en pantalla
+  if(!db) return;
+  try{
+    const r = await db.from('proyeccion_config')
+      .upsert({escenario_id:PY_ESCENARIO, updated_at:pyUpdatedAt}, {onConflict:'escenario_id'});
+    if(r.error) throw r.error;
+  }catch(e){ console.warn('touch updated_at', e); }
+}
+
+/* Formato "12/07/2026 15:21" en horario local */
+function pyFmtUpdated(iso){
+  if(!iso) return null;
+  const d = new Date(iso);
+  if(isNaN(d)) return null;
+  const p = n => String(n).padStart(2,'0');
+  return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/* Pinta la marca en el margen del informe */
+function pyRenderUpdated(){
+  const el = document.getElementById('py-updated');
+  if(!el) return;
+  const txt = pyFmtUpdated(pyUpdatedAt);
+  el.textContent = txt ? `Última actualización: ${txt}` : 'Sin actualizaciones registradas';
+}
+
 async function pySaveCfg(){
   if(!db) return;
-  const row = {escenario_id:PY_ESCENARIO, ...pyCfg};
+  const row = {escenario_id:PY_ESCENARIO, ...pyCfg, updated_at:new Date().toISOString()};
   const r = await db.from('proyeccion_config').upsert(row, {onConflict:'escenario_id'});
   if(r.error) console.warn('save cfg', r.error);
+  else { pyUpdatedAt = row.updated_at; pyRenderUpdated(); }
 }
 
 async function pySaveCell(key, m, monto){
@@ -405,7 +440,8 @@ async function pySaveCell(key, m, monto){
   const row = {escenario_id:PY_ESCENARIO, concepto_key:key, mes_offset:m, monto_ars:monto};
   const r = await db.from('proyeccion_valores')
     .upsert(row, {onConflict:'escenario_id,concepto_key,mes_offset'});
-  if(r.error){ console.warn('save cell', r.error); alert('No se pudo guardar: '+r.error.message); }
+  if(r.error){ console.warn('save cell', r.error); alert('No se pudo guardar: '+r.error.message); return; }
+  await pyTouch();
 }
 
 /* Guardado masivo (usado por el import) */
@@ -414,6 +450,7 @@ async function pySaveBulk(rows){
   const r = await db.from('proyeccion_valores')
     .upsert(rows, {onConflict:'escenario_id,concepto_key,mes_offset'});
   if(r.error){ alert('No se pudo importar: '+r.error.message); return false; }
+  await pyTouch();
   return true;
 }
 

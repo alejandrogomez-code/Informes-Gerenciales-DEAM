@@ -133,6 +133,7 @@
       <div class="control-panel">
         <div class="crumb">Proyección<small id="py-sub">Flujo de caja · 12 meses · valores en ARS ($)</small></div>
         <div class="cp-spacer"></div>
+        <div class="py-updated" id="py-updated">Sin actualizaciones registradas</div>
         <div class="field no-print"><label>Moneda</label>
           <div class="seg" id="py-moneda"><button class="on" data-moneda="ars" onclick="pySetMoneda('ars')">ARS $</button><button data-moneda="usd" onclick="pySetMoneda('usd')">USD</button></div></div>
         <div class="field no-print"><label>&nbsp;</label><div style="display:flex;gap:8px">
@@ -184,7 +185,13 @@
         <div id="pr-host"></div>
       </div>
     </section>
-    <section class="view" id="view-analisis"><div class="control-panel"><div class="crumb">Análisis<small>Próxima etapa</small></div></div><div class="content"><div class="panel"><div class="placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><h2>Análisis</h2><p>Pendiente de definición.</p></div></div></div></section>
+    <section class="view" id="view-analisis">
+      <div class="control-panel">
+        <div class="crumb">Análisis<small id="an-sub">Reporte financiero de corto y mediano plazo</small></div>
+        <div class="cp-spacer"></div>
+      </div>
+      <div class="content"><div id="an-host"></div></div>
+    </section>
 
     <section class="view" id="view-config"><div class="control-panel"><div class="crumb">Configuración<small>Umbrales de los indicadores</small></div></div>
       <div class="content"><div class="note"><span>⚙️</span><div>Umbrales por defecto sugeridos para una importadora en Argentina. Cuando pasemos a base de datos quedarán configurables y se guardarán en Supabase.</div></div>
@@ -261,5 +268,6 @@
 <script src="gestion.js"></script>
 <script src="proyeccion.js"></script>
 <script src="presupuesto.js"></script>
+<script src="analisis.js"></script>
 </body>
 </html>

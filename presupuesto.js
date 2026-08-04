@@ -274,6 +274,7 @@ async function loadPresupuesto(){
    RENDER PRINCIPAL (router interno de sub-vistas)
    ===================================================================== */
 function renderPresupuesto(){
+  renderUpdated('presupuesto');
   const sub=document.getElementById('pr-sub');
   const fyName = PR.fiscalYears.find(f=>f.id===PR.currentFyId); 
   if(sub) sub.textContent = 'Seguimiento presupuestario · Ejercicio abril–marzo';
@@ -490,6 +491,7 @@ async function prTcBlur(inp){
     m.usd_rate=newVal;            // reflejar en memoria sin recargar todo
     delete PR.tcDirty[mId];
   }catch(e){ alert('No se pudo guardar el tipo de cambio: '+(e.message||e)); return; }
+  await touchSeccion('presupuesto');
   renderPresupuesto();
 }
 
@@ -531,6 +533,7 @@ async function prSaveGrid(){
   }catch(e){
     alert('No se pudo guardar: '+(e.message||e)); return;
   }
+  await touchSeccion('presupuesto');
   PR.gridDirty={};
   await loadPresupuesto();
   alert('Carga guardada.');
@@ -542,6 +545,7 @@ async function prAddSub(catId, catName){
   if(!name || !name.trim()) return;
   const r=await db.from('subcategories').insert({category_id:catId, name:name.trim()}).select().single();
   if(r.error){ alert('No se pudo crear la subcategoría: '+r.error.message); return; }
+  await touchSeccion('presupuesto');
   await loadPresupuesto();
 }
 
@@ -835,6 +839,7 @@ async function prRefRateBlur(inp){
     if(r.error) throw r.error;
     m.usd_rate=newVal;
   }catch(e){ alert('No se pudo guardar el tipo de cambio: '+(e.message||e)); return; }
+  await touchSeccion('presupuesto');
   renderPresupuesto();
 }
 
@@ -857,6 +862,7 @@ async function prRefBlur(inp){
       {onConflict:'fiscal_year_id,category_id'});
     if(r.error) throw r.error;
   }catch(e){ alert('No se pudo guardar: '+(e.message||e)); return; }
+  await touchSeccion('presupuesto');
   await loadPresupuesto();
 }
 
@@ -906,6 +912,7 @@ async function prRefImport(aoa){
     const r=await db.from('reference_values').upsert(rows,{onConflict:'fiscal_year_id,category_id'});
     if(r.error) throw r.error;
   }catch(e){ alert('No se pudo importar: '+(e.message||e)); return; }
+  await touchSeccion('presupuesto');
   await loadPresupuesto();
   alert('Referencia importada.');
 }

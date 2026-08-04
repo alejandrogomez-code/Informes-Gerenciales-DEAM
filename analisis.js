@@ -189,6 +189,7 @@ async function anAnalizar(){
     if(!r.ok) throw new Error(data.error||`Error ${r.status}`);
     AN.reporte = data.reporte;
     AN.generado = data.generado;
+    await touchSeccion('analisis');
   }catch(e){
     AN.error = e.message||String(e);
   }
@@ -221,6 +222,7 @@ function anMd(md){
 }
 
 function renderAnalisis(){
+  renderUpdated('analisis');
   const host=document.getElementById('an-host'); if(!host) return;
   const sub=document.getElementById('an-sub');
   if(sub) sub.textContent = AN.generado

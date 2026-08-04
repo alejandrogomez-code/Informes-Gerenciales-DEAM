@@ -137,6 +137,7 @@ async function gSaveTc(fecha, nuevoTc){
     if(r.error) throw r.error;
     m.usd_rate=nuevoTc;                 // reflejar en memoria (fuente compartida)
   }catch(e){ alert('No se pudo guardar el tipo de cambio: '+(e.message||e)); return false; }
+  await touchSeccion('gestion');
   return true;
 }
 function gTcFocus(inp){ const tc=gCurrentTc(); inp.value = tc?String(tc):''; inp.select(); }
@@ -291,6 +292,7 @@ function gComputar(val){
    RENDER (dispatcher según modo de vista)
    ===================================================================== */
 function renderGestion(){
+  renderUpdated('gestion');
   // Aplicar visibilidad del segmented toggle según estado
   const toggle = document.getElementById('g-vista-toggle');
   if(toggle) toggle.querySelectorAll('.seg').forEach(b=>{
@@ -643,6 +645,7 @@ async function saveGCat(){
   });
   const r=await db.from('gestion_periodos').update({valores}).eq('id',p.id);
   if(r.error){ alert('No se pudo guardar: '+r.error.message); return; }
+  await touchSeccion('gestion');
   p.valores=valores; closeGCatModal(); renderGestion();
   // Sobrescribe el ejercicio actual del Presupuesto con lo cargado en Gestión.
   if(typeof prSyncFromGestion==='function' && typeof PR!=='undefined' && PR.loaded){
@@ -668,6 +671,7 @@ async function saveGPeriod(){
   if(!db){ alert('Conectá Supabase para guardar.'); return; }
   const r=await db.from('gestion_periodos').insert({fecha,etiqueta,valores:{}}).select('id').single();
   if(r.error){ alert('No se pudo crear: '+r.error.message); return; }
+  await touchSeccion('gestion');
   gSel=r.data.id; closeGPeriod(); await loadGestion();
 }
 

@@ -53,6 +53,7 @@
       <div class="control-panel">
         <div class="crumb">Capital de Trabajo<small id="cap-sub">Cierre mensual · valores en USD</small></div>
         <div class="cp-spacer"></div>
+        <button class="btn" onclick="openModal()">
         <div class="field no-print"><label>Tipo de cierre</label>
           <div class="seg" id="cap-tipo"><button class="on" data-tipo="mensual">Mensual</button><button data-tipo="parcial">Parcial</button><button data-tipo="todos">Todos</button></div></div>
         <div class="field no-print"><label>Fecha de cierre</label><select id="cap-fecha"></select></div>
@@ -82,6 +83,7 @@
       <div class="control-panel">
         <div class="crumb">Punto de Equilibrio<small>Evolución y carga de datos · valores en USD</small></div>
         <div class="cp-spacer"></div>
+        <div class="sec-updated" id="be-updated">Sin actualizaciones registradas</div>
         <button class="btn" onclick="openModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>Cargar</button>
         <button class="btn gray sm no-print" onclick="exportEquilibrio()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Excel</button>
         <button class="btn gray sm no-print" onclick="printReport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9V2h12v7M6 18H4v-6h16v6h-2M8 14h8v8H8z"/></svg>PDF</button>
@@ -107,11 +109,13 @@
       <div class="control-panel">
         <div class="crumb">Informe de Gestión<small id="g-sub">Estado de Resultados</small></div>
         <div class="cp-spacer"></div>
+        <div class="sec-updated" id="g-updated">Sin actualizaciones registradas</div>
         <div class="seg-ctrl no-print" id="g-vista-toggle" role="tablist">
           <button class="seg active" data-vista="periodo" onclick="setGVista('periodo')">Por período</button>
           <button class="seg" data-vista="comparativa" onclick="setGVista('comparativa')">Comparativa mensual</button>
         </div>
         <div class="field no-print" id="g-periodo-field"><label>Período</label><select id="g-periodo"></select></div>
+        <div class="sec-updated" id="pr-updated">Sin actualizaciones registradas</div>
         <div class="field no-print"><label>Moneda</label>
           <div class="seg" id="g-moneda"><button class="on" onclick="setGMoneda('ars')" id="g-cur-ars">ARS $</button><button onclick="setGMoneda('usd')" id="g-cur-usd">USD</button></div></div>
         <div class="field no-print"><label>&nbsp;</label><div style="display:flex;gap:8px">
@@ -187,8 +191,9 @@
     </section>
     <section class="view" id="view-analisis">
       <div class="control-panel">
-        <div class="crumb">Análisis<small id="an-sub">Reporte financiero de corto y mediano plazo</small></div>
+       <div class="crumb">Análisis<small id="an-sub">Reporte financiero de corto y mediano plazo</small></div>
         <div class="cp-spacer"></div>
+        <div class="sec-updated" id="an-updated">Sin actualizaciones registradas</div>
       </div>
       <div class="content"><div id="an-host"></div></div>
     </section>
@@ -263,6 +268,7 @@
 <div id="conn-banner" style="display:none"></div>
 
 <script src="config.js"></script>
+<script src="updates.js"></script>
 <script src="app.js"></script>
 <script src="revision.js"></script>
 <script src="gestion.js"></script>

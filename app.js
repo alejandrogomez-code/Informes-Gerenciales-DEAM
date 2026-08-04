@@ -210,6 +210,7 @@ document.querySelectorAll('#cap-tipo button').forEach(b=>b.addEventListener('cli
 fechaSel.addEventListener('change',renderCapital);
 
 function renderCapital(){
+  renderUpdated('capital');
   const c=curCierre();
   const tbody=document.querySelector('#cap-table tbody');
   if(!c){ tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--ink-faint);padding:30px">Sin cierres cargados para este filtro.</td></tr>';
@@ -331,6 +332,7 @@ async function saveCapital(){
       const r=await db.from('cierre_lineas').insert(lineas.map(l=>({...l,cierre_id:c.data.id}))); if(r.error)throw r.error;
     }
   }catch(e){ alert('No se pudo guardar: '+(e.message||e)); return; }
+  await touchSeccion('capital');
   closeCapModal();
   await loadData();
   // mostrar el cierre recién guardado
@@ -345,6 +347,7 @@ async function deleteCapital(){
   if(!confirm('¿Eliminar este cierre y todas sus líneas?'))return;
   const res=await db.from('cierres').delete().eq('id',capEditId);
   if(res.error){ alert('No se pudo eliminar: '+res.error.message); return; }
+  await touchSeccion('capital');
   closeCapModal(); await loadData(); fillFechas();
 }
 window.openCapModal=openCapModal; window.closeCapModal=closeCapModal; window.editCurrentCierre=editCurrentCierre;
@@ -373,6 +376,7 @@ function beCalc(r){
     vUsd:r.tc>0?r.v/r.tc:0,cvUsd:r.tc>0?r.cv/r.tc:0,cfUsd:r.tc>0?r.cf/r.tc:0};
 }
 function renderBeTable(){
+  renderUpdated('equilibrio');
   const sorted=[...equilibrio].sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const tbody=document.getElementById('be-body');
   if(!sorted.length){ tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--ink-faint);padding:30px">Sin períodos. Usá <b>Cargar</b> para agregar el primero.</td></tr>'; renderBeChart(); return; }
@@ -448,6 +452,7 @@ async function saveModal(){
   if(editId) res=await db.from('equilibrio_periodos').update(payload).eq('id',editId);
   else       res=await db.from('equilibrio_periodos').upsert(payload,{onConflict:'fecha'});
   if(res.error){ alert('No se pudo guardar: '+res.error.message); return; }
+  await touchSeccion('equilibrio');
   closeModal();
   await loadData(); renderBeTable();
 }
@@ -456,6 +461,7 @@ async function delBe(id){
   if(!db){ alert('Conectá Supabase para eliminar.'); return; }
   const res=await db.from('equilibrio_periodos').delete().eq('id',id);
   if(res.error){ alert('No se pudo eliminar: '+res.error.message); return; }
+  await touchSeccion('equilibrio');
   await loadData(); renderBeTable();
 }
 window.openModal=openModal; window.closeModal=closeModal; window.modalPreview=modalPreview;
@@ -540,6 +546,8 @@ document.querySelectorAll('.nav-item').forEach(it=>it.addEventListener('click',(
    ===================================================================== */
 (async function init(){
   renderTiles(); renderConfig();
-  await loadData();
+  await Promise.all([ loadData(), loadUpdates() ]);
   fillFechas(); renderBeTable();
+  // Repintar marcas de las secciones que cargan por su cuenta
+  ['gestion','presupuesto','analisis'].forEach(s=>renderUpdated(s));
 })();

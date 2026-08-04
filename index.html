@@ -53,7 +53,7 @@
       <div class="control-panel">
         <div class="crumb">Capital de Trabajo<small id="cap-sub">Cierre mensual · valores en USD</small></div>
         <div class="cp-spacer"></div>
-        <button class="btn" onclick="openModal()">
+        <div class="sec-updated" id="cap-updated">Sin actualizaciones registradas</div>
         <div class="field no-print"><label>Tipo de cierre</label>
           <div class="seg" id="cap-tipo"><button class="on" data-tipo="mensual">Mensual</button><button data-tipo="parcial">Parcial</button><button data-tipo="todos">Todos</button></div></div>
         <div class="field no-print"><label>Fecha de cierre</label><select id="cap-fecha"></select></div>
@@ -115,7 +115,6 @@
           <button class="seg" data-vista="comparativa" onclick="setGVista('comparativa')">Comparativa mensual</button>
         </div>
         <div class="field no-print" id="g-periodo-field"><label>Período</label><select id="g-periodo"></select></div>
-        <div class="sec-updated" id="pr-updated">Sin actualizaciones registradas</div>
         <div class="field no-print"><label>Moneda</label>
           <div class="seg" id="g-moneda"><button class="on" onclick="setGMoneda('ars')" id="g-cur-ars">ARS $</button><button onclick="setGMoneda('usd')" id="g-cur-usd">USD</button></div></div>
         <div class="field no-print"><label>&nbsp;</label><div style="display:flex;gap:8px">
@@ -176,6 +175,7 @@
       <div class="control-panel">
         <div class="crumb">Presupuesto<small id="pr-sub">Seguimiento presupuestario · Ejercicio abril–marzo</small></div>
         <div class="cp-spacer"></div>
+        <div class="sec-updated" id="pr-updated">Sin actualizaciones registradas</div>
         <div class="field no-print"><label>Moneda</label>
           <div class="seg" id="pr-moneda"><button class="on" onclick="prSetCurrency('ars')" id="pr-cur-ars">ARS $</button><button onclick="prSetCurrency('usd')" id="pr-cur-usd">USD</button></div></div>
       </div>
@@ -191,7 +191,7 @@
     </section>
     <section class="view" id="view-analisis">
       <div class="control-panel">
-       <div class="crumb">Análisis<small id="an-sub">Reporte financiero de corto y mediano plazo</small></div>
+        <div class="crumb">Análisis<small id="an-sub">Reporte financiero de corto y mediano plazo</small></div>
         <div class="cp-spacer"></div>
         <div class="sec-updated" id="an-updated">Sin actualizaciones registradas</div>
       </div>

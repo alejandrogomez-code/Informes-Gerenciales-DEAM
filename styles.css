@@ -167,7 +167,7 @@
 
   /* ---------- Print / PDF ---------- */
   @media print{
-    @page{size:A4 landscape;margin:9mm}
+    @page{margin:9mm}
     /* Subir contraste en impresión: las impresoras tienden a atenuar los grises
        (--ink era #2b2b33 ≈ gris oscuro) y los números monospace en weight 400
        quedan flojos. Forzamos negro pleno en los tokens y le damos más cuerpo
@@ -324,7 +324,7 @@
 
 /* ---------- Print tightening (todos los informes en 1 sola página) ---------- */
 @media print{
-  @page{size:A4 landscape;margin:7mm}
+  @page{margin:7mm}
   .panel{padding:8px !important;margin-bottom:4px !important;border-radius:6px}
   .ind-grid{grid-template-columns:repeat(3,1fr);gap:6px}
   .ind{padding:7px;break-inside:avoid}

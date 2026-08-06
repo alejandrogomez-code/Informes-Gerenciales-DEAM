@@ -478,10 +478,46 @@ document.getElementById('modal').addEventListener('click',e=>{ if(e.target.id===
    forzamos al chart a redibujarse en las dimensiones de impresión, lo
    capturamos como PNG y lo insertamos como <img>. Después de imprimir,
    restauramos el canvas. */
+/* Ajusta la vista activa para que entre en UNA sola página al imprimir/PDF.
+   Mide el alto real del contenido y, si supera el alto útil de una hoja A4
+   apaisada, aplica un transform:scale para comprimirlo. Funciona para todas
+   las secciones sin tener que afinar el CSS de cada una a mano. */
+function fitActiveViewToOnePage(){
+  const view = document.querySelector('.view.active');
+  if(!view) return;
+  // Alto útil de A4 apaisada (210mm) menos márgenes de @page (~9mm x2).
+  // 1mm ≈ 3.78px. 210 - 18 = 192mm ≈ 725px. Dejamos un colchón.
+  const PAGE_H = 715;
+  view.style.transform = 'none';
+  const h = view.scrollHeight;
+  if(h > PAGE_H){
+    const scale = Math.max(0.55, PAGE_H / h);   // no bajar de 0.55 (ilegible)
+    view.style.transformOrigin = 'top left';
+    view.style.transform = `scale(${scale})`;
+    // Al escalar, el contenido ocupa menos ancho; lo estiramos para que
+    // siga usando todo el ancho de la hoja.
+    view.style.width = (100/scale) + '%';
+    view.dataset.printScaled = '1';
+  } else {
+    view.style.transform = '';
+    view.style.transformOrigin = '';
+    view.style.width = '';
+    delete view.dataset.printScaled;
+  }
+}
+function unfitActiveView(){
+  document.querySelectorAll('.view[data-print-scaled]').forEach(view=>{
+    view.style.transform = '';
+    view.style.transformOrigin = '';
+    view.style.width = '';
+    delete view.dataset.printScaled;
+  });
+}
 function printReport(){
   prepareChartsForPrint();
-  // Permitir que el browser pinte el <img> antes de abrir el diálogo
-  setTimeout(()=>window.print(), 30);
+  fitActiveViewToOnePage();
+  // Permitir que el browser pinte el <img> y aplique el scale antes del diálogo
+  setTimeout(()=>window.print(), 40);
 }
 function prepareChartsForPrint(){
   if(typeof beChart==='undefined' || !beChart) return;
@@ -513,8 +549,9 @@ function prepareChartsForPrint(){
 function restoreChartsAfterPrint(){
   const img = document.getElementById('beChart-print-img');
   if(img) img.remove();
+  unfitActiveView();
 }
-window.addEventListener('beforeprint', prepareChartsForPrint);
+window.addEventListener('beforeprint', ()=>{ prepareChartsForPrint(); fitActiveViewToOnePage(); });
 window.addEventListener('afterprint', restoreChartsAfterPrint);
 function ensureXLSX(){ if(typeof XLSX==='undefined'){ alert('No se pudo cargar la librería de Excel. Verificá tu conexión e intentá de nuevo.'); return false; } return true; }
 function exportCapital(){

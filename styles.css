@@ -198,6 +198,14 @@
     thead th{font-size:9px}
     .chart-wrap{height:165px;padding:8px}
     .print-head{display:flex !important}
+    /* Vista comprimida a una sola página: evitamos que el navegador
+       inserte saltos de página dentro del contenido ya escalado. */
+    .view[data-print-scaled]{overflow:visible}
+    .view[data-print-scaled] .panel,
+    .view[data-print-scaled] .ind,
+    .view[data-print-scaled] .ind-grid,
+    .view[data-print-scaled] table,
+    .view[data-print-scaled] tr{break-inside:avoid}
   }
   .print-head{display:none;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--aubergine)}
   .print-head .logo{width:24px;height:24px;border-radius:5px;background:var(--aubergine);color:#fff;
@@ -562,10 +570,10 @@ tr.rev-row:hover td{background:#fbf0da !important}
 .pr-revbtn.on .dot{background:#d99b1c}
 .pr-revrow td{background:#faf9fb}
 
-/* Marca de última actualización (Proyección) */
-.py-updated{font-size:11.5px;color:var(--ink-faint);white-space:nowrap;align-self:center;
+/* Marca de última actualización (todas las secciones) */
+.py-updated,.sec-updated{font-size:11.5px;color:var(--ink-faint);white-space:nowrap;align-self:center;
   background:#f7f6f8;border:1px solid var(--line);border-radius:7px;padding:5px 11px}
-@media print{ .py-updated{background:none;border:none;padding:0;color:#666} }
+@media print{ .py-updated,.sec-updated{background:none;border:none;padding:0;color:#666} }
 
 /* =====================================================================
    Sección Análisis

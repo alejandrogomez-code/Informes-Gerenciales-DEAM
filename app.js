@@ -508,7 +508,11 @@ function fitActiveViewToOnePage(){
   // Dimensiones útiles de A4 (menos márgenes de @page), según orientación.
   const PAGE_W = portrait ? 715  : 1060;
   const PAGE_H = portrait ? 1070 : 715;
-  // Limpiar cualquier escala previa para medir el tamaño real.
+  // Limpiar cualquier escala previa para medir el tamaño real. Es CRÍTICO
+  // resetear el zoom acá: si quedó uno de una ejecución anterior, la medición
+  // saldría distorsionada (mediría sobre el contenido ya achicado) y el cálculo
+  // daría scale≈1, con lo que no se aplicaría ningún zoom.
+  view.style.zoom = '';
   view.style.transform = 'none';
   view.style.width = '';
   // Medir como se va a imprimir: ocultamos temporalmente las columnas marcadas
@@ -531,38 +535,28 @@ function fitActiveViewToOnePage(){
   let scale = Math.min(scaleH, scaleW);
   scale = Math.max(0.35, Math.min(scale, MAX_UP));
   if(Math.abs(scale - 1) > 0.02){
-    view.style.transformOrigin = 'top left';
-    view.style.transform = `scale(${scale})`;
-    view.style.width = (100/scale) + '%';   // recuperar ancho tras escalar
-    // Un transform:scale NO reduce el espacio que el elemento ocupa en el flujo
-    // (sigue "midiendo" su alto original), lo que puede generar una segunda
-    // página en blanco. Compensamos con un margen inferior negativo igual al
-    // alto sobrante. NO usamos overflow:hidden porque recorta la tabla.
-    const sobra = h - (h * scale);
-    view.style.marginBottom = (-sobra) + 'px';
+    // Usamos `zoom` en vez de `transform:scale`. zoom SÍ reduce el espacio real
+    // que ocupa el contenido (transform no, y por eso dejaba páginas en blanco
+    // o partía la tabla). El navegador lo aplica de forma nativa al generar el
+    // PDF, sin depender de timing.
+    view.style.zoom = scale;
     view.dataset.printScaled = '1';
   } else {
-    view.style.transform = '';
-    view.style.transformOrigin = '';
-    view.style.width = '';
-    view.style.marginBottom = '';
+    view.style.zoom = '';
     delete view.dataset.printScaled;
   }
 }
 function unfitActiveView(){
   document.querySelectorAll('.view[data-print-scaled]').forEach(view=>{
-    view.style.transform = '';
-    view.style.transformOrigin = '';
-    view.style.width = '';
-    view.style.marginBottom = '';
+    view.style.zoom = '';
     delete view.dataset.printScaled;
   });
 }
 function printReport(){
   prepareChartsForPrint();
   fitActiveViewToOnePage();
-  // Permitir que el browser pinte el <img> y aplique el scale antes del diálogo
-  setTimeout(()=>window.print(), 40);
+  // Dar tiempo a pintar el <img> del gráfico y aplicar el zoom antes del diálogo
+  setTimeout(()=>window.print(), 120);
 }
 function prepareChartsForPrint(){
   if(typeof beChart==='undefined' || !beChart) return;

@@ -480,7 +480,7 @@ document.getElementById('modal').addEventListener('click',e=>{ if(e.target.id===
    restauramos el canvas. */
 /* Secciones que se imprimen en VERTICAL (portrait). El resto va en
    horizontal (landscape), que es lo que conviene a las tablas anchas. */
-const PRINT_PORTRAIT = ['capital'];
+const PRINT_PORTRAIT = [];
 
 /* Fija la orientación del PDF inyectando una regla @page, según la sección. */
 function setPrintOrientation(portrait){
@@ -501,43 +501,51 @@ function setPrintOrientation(portrait){
 function fitActiveViewToOnePage(){
   const view = document.querySelector('.view.active');
   if(!view) return;
-  // ¿Qué sección es? El id es "view-capital", "view-presupuesto", etc.
   const seccion = (view.id||'').replace('view-','');
   const portrait = PRINT_PORTRAIT.includes(seccion);
   setPrintOrientation(portrait);
   // Dimensiones útiles de A4 (menos márgenes de @page), según orientación.
-  // 1mm ≈ 3.78px. Portrait: 210x297mm. Landscape: 297x210mm.
   const PAGE_W = portrait ? 715  : 1060;
   const PAGE_H = portrait ? 1070 : 715;
   // Limpiar cualquier escala previa para medir el tamaño real.
   view.style.transform = 'none';
   view.style.width = '';
+  // Medir como se va a imprimir: ocultamos temporalmente las columnas marcadas
+  // (meses vacíos del Presupuesto) para que el ancho/alto medidos coincidan con
+  // el PDF real. Sin esto, medimos 12 columnas pero imprimimos 6, y el escalado
+  // queda mal (contenido chico y pegado arriba).
+  const hidden = view.querySelectorAll('.pr-mcol-hide');
+  hidden.forEach(el=> el.style.display='none');
   const h = view.scrollHeight;
-  // Medir el ancho real del contenido: el scrollWidth de la vista puede quedar
-  // recortado por contenedores con overflow (p. ej. la grilla del Presupuesto).
   let w = view.scrollWidth;
   view.querySelectorAll('.pr-scroll, table, [style*="overflow"]').forEach(el=>{
     if(el.scrollWidth > w) w = el.scrollWidth;
   });
-  // Factor por alto y por ancho. Tomamos el más restrictivo (el menor) para
-  // que el contenido entre completo en la hoja SIN desbordar por ningún lado.
-  // A diferencia de antes, permitimos AMPLIAR (escala > 1) cuando el contenido
-  // es más chico que la hoja, para que ocupe la página completa en vez de
-  // quedar condensado arriba. Un tope evita que se vea desproporcionado.
-  const MAX_UP = 1.9;   // ampliación máxima
+  hidden.forEach(el=> el.style.display='');   // restaurar pantalla
+  // Factor por alto y por ancho; el más restrictivo. Permitimos AMPLIAR para
+  // llenar la hoja cuando el contenido es más chico.
+  const MAX_UP = 2.2;
   const scaleH = PAGE_H / h;
   const scaleW = PAGE_W / w;
   let scale = Math.min(scaleH, scaleW);
-  scale = Math.max(0.45, Math.min(scale, MAX_UP));   // acotar entre 0.45 y 1.9
+  scale = Math.max(0.42, Math.min(scale, MAX_UP));
   if(Math.abs(scale - 1) > 0.02){
     view.style.transformOrigin = 'top left';
     view.style.transform = `scale(${scale})`;
     view.style.width = (100/scale) + '%';   // recuperar ancho tras escalar
+    // Un transform:scale NO reduce el espacio que el elemento ocupa en el flujo
+    // (sigue "midiendo" su alto original), y por eso el navegador lo parte en
+    // varias páginas aunque visualmente entre. Fijamos la altura al alto real
+    // escalado para que ocupe lo que se ve y quepa en una sola hoja.
+    view.style.height = (h * scale) + 'px';
+    view.style.overflow = 'hidden';
     view.dataset.printScaled = '1';
   } else {
     view.style.transform = '';
     view.style.transformOrigin = '';
     view.style.width = '';
+    view.style.height = '';
+    view.style.overflow = '';
     delete view.dataset.printScaled;
   }
 }
@@ -546,6 +554,8 @@ function unfitActiveView(){
     view.style.transform = '';
     view.style.transformOrigin = '';
     view.style.width = '';
+    view.style.height = '';
+    view.style.overflow = '';
     delete view.dataset.printScaled;
   });
 }

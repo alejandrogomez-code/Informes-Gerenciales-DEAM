@@ -479,8 +479,9 @@ document.getElementById('modal').addEventListener('click',e=>{ if(e.target.id===
    capturamos como PNG y lo insertamos como <img>. Después de imprimir,
    restauramos el canvas. */
 /* Secciones que se imprimen en VERTICAL (portrait). El resto va en
-   horizontal (landscape), que es lo que conviene a las tablas anchas. */
-const PRINT_PORTRAIT = [];
+   horizontal (landscape). Presupuesto y Capital son tablas altas y angostas:
+   entran más legibles en vertical (escala ~0.6) que en horizontal (~0.4). */
+const PRINT_PORTRAIT = ['presupuesto', 'capital'];
 
 /* Fija la orientación del PDF inyectando una regla @page, según la sección. */
 function setPrintOrientation(portrait){
@@ -528,24 +529,23 @@ function fitActiveViewToOnePage(){
   const scaleH = PAGE_H / h;
   const scaleW = PAGE_W / w;
   let scale = Math.min(scaleH, scaleW);
-  scale = Math.max(0.42, Math.min(scale, MAX_UP));
+  scale = Math.max(0.35, Math.min(scale, MAX_UP));
   if(Math.abs(scale - 1) > 0.02){
     view.style.transformOrigin = 'top left';
     view.style.transform = `scale(${scale})`;
     view.style.width = (100/scale) + '%';   // recuperar ancho tras escalar
     // Un transform:scale NO reduce el espacio que el elemento ocupa en el flujo
-    // (sigue "midiendo" su alto original), y por eso el navegador lo parte en
-    // varias páginas aunque visualmente entre. Fijamos la altura al alto real
-    // escalado para que ocupe lo que se ve y quepa en una sola hoja.
-    view.style.height = (h * scale) + 'px';
-    view.style.overflow = 'hidden';
+    // (sigue "midiendo" su alto original), lo que puede generar una segunda
+    // página en blanco. Compensamos con un margen inferior negativo igual al
+    // alto sobrante. NO usamos overflow:hidden porque recorta la tabla.
+    const sobra = h - (h * scale);
+    view.style.marginBottom = (-sobra) + 'px';
     view.dataset.printScaled = '1';
   } else {
     view.style.transform = '';
     view.style.transformOrigin = '';
     view.style.width = '';
-    view.style.height = '';
-    view.style.overflow = '';
+    view.style.marginBottom = '';
     delete view.dataset.printScaled;
   }
 }
@@ -554,8 +554,7 @@ function unfitActiveView(){
     view.style.transform = '';
     view.style.transformOrigin = '';
     view.style.width = '';
-    view.style.height = '';
-    view.style.overflow = '';
+    view.style.marginBottom = '';
     delete view.dataset.printScaled;
   });
 }

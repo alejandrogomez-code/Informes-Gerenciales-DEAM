@@ -329,6 +329,34 @@ function prRenderGrid(host){
   const ventasAccum = accumName("Total de Ventas");
   const dirtyCount = Object.keys(PR.gridDirty).length;
 
+  /* --- Para el PDF: detectar meses con datos y ocultar los vacíos sobrantes ---
+     Un mes "tiene datos" si alguna categoría cargada, subcategoría o su TC
+     tienen valor. En impresión mostramos los meses con datos + los 2 siguientes,
+     y ocultamos el resto (columnas todas en cero) para que no se haga tan ancho.
+     En pantalla se ven todos: esto solo afecta al PDF. */
+  const monthHasData = m => {
+    // TC del mes
+    const tc = (m.id in PR.tcDirty) ? PR.tcDirty[m.id] : (m.usd_rate!=null?String(m.usd_rate):'');
+    if(parseNum(tc)) return true;
+    // alguna categoría (directa) o subcategoría con valor
+    for(const cat of PR.categories){
+      if(prIsCalc(cat.name)) continue;
+      const subs = catSubs(cat.id);
+      if(subs.length){
+        if(subs.some(s=>parseNum(cellRaw(m.id,cat.id,s.id)))) return true;
+      }else{
+        if(parseNum(cellRaw(m.id,cat.id,''))) return true;
+      }
+    }
+    return false;
+  };
+  let lastDataIdx = -1;
+  mc.forEach((m,i)=>{ if(monthHasData(m)) lastDataIdx = i; });
+  // índice hasta el que mostramos en print: último con datos + 2 meses
+  const printCutIdx = lastDataIdx < 0 ? mc.length-1 : Math.min(mc.length-1, lastDataIdx + 2);
+  // clase para marcar columnas de meses a ocultar en impresión
+  const mHideClass = i => (i > printCutIdx ? ' pr-mcol-hide' : '');
+
   const fyOptions = PR.fiscalYears.map(f=>`<option value="${f.id}" ${f.id===fyId?'selected':''}>${f.name}${f.is_reference?' (ref.)':''}</option>`).join('');
   const isCur = !(PR.fiscalYears.find(f=>f.id===fyId)||{}).is_reference;
   const syncBtn = isCur ? `<button class="btn gray" onclick="prSyncNow()" title="Traer los valores del Informe de Gestión para este ejercicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 8a8 8 0 0 0-14-3M4 16a8 8 0 0 0 14 3"/></svg>Sincronizar desde Gestión</button>` : '';
@@ -350,19 +378,21 @@ function prRenderGrid(host){
     const conv = (v,mId)=>{ if(!usd) return v; const tc=tcOf(mId); return tc?v/tc:null; };
 
     let cells='';
-    for(const m of mc){
+    for(let mi=0; mi<mc.length; mi++){
+      const m = mc[mi];
+      const hc = mHideClass(mi);
       if(calc || hasSubs){
         const base = calc?valTotalLive(cat.name,m.id):catTotalLive(cat.id,m.id);
         const shown = conv(base,m.id);
-        cells += `<td class="pr-num"><span class="pr-cattot">${shown==null?'—':prMoney(shown,usd)}</span></td>`;
+        cells += `<td class="pr-num${hc}"><span class="pr-cattot">${shown==null?'—':prMoney(shown,usd)}</span></td>`;
       }else if(usd){
         // en dólares: mostrar convertido, no editable (la carga es en pesos)
         const base=parseNum(cellRaw(m.id,cat.id,''));
         const shown=conv(base,m.id);
-        cells += `<td class="pr-num"><span class="pr-cattot">${(base&&shown!=null)?prMoney(shown,true):(base?'—':'')}</span></td>`;
+        cells += `<td class="pr-num${hc}"><span class="pr-cattot">${(base&&shown!=null)?prMoney(shown,true):(base?'—':'')}</span></td>`;
       }else{
         const raw=cellRaw(m.id,cat.id,'');
-        cells += `<td class="pr-num"><input class="pr-cell" inputmode="decimal" autocomplete="off" placeholder="$ 0"
+        cells += `<td class="pr-num${hc}"><input class="pr-cell" inputmode="decimal" autocomplete="off" placeholder="$ 0"
           value="${raw?nf0.format(parseNum(raw)):''}"
           onfocus="prCellFocus(this)" onblur="prCellBlur(this)"
           data-m="${m.id}" data-c="${cat.id}" data-s=""></td>`;
@@ -379,14 +409,16 @@ function prRenderGrid(host){
     if(!calc){
       for(const s of subs){
         let scells='';
-        for(const m of mc){
+        for(let mi=0; mi<mc.length; mi++){
+          const m = mc[mi];
+          const hc = mHideClass(mi);
           if(usd){
             const base=parseNum(cellRaw(m.id,cat.id,s.id));
             const shown=conv(base,m.id);
-            scells += `<td class="pr-num"><span class="pr-cattot">${(base&&shown!=null)?prMoney(shown,true):(base?'—':'')}</span></td>`;
+            scells += `<td class="pr-num${hc}"><span class="pr-cattot">${(base&&shown!=null)?prMoney(shown,true):(base?'—':'')}</span></td>`;
           }else{
             const raw=cellRaw(m.id,cat.id,s.id);
-            scells += `<td class="pr-num"><input class="pr-cell" inputmode="decimal" autocomplete="off" placeholder="$ 0"
+            scells += `<td class="pr-num${hc}"><input class="pr-cell" inputmode="decimal" autocomplete="off" placeholder="$ 0"
               value="${raw?nf0.format(parseNum(raw)):''}"
               onfocus="prCellFocus(this)" onblur="prCellBlur(this)"
               data-m="${m.id}" data-c="${cat.id}" data-s="${s.id}"></td>`;
@@ -400,18 +432,18 @@ function prRenderGrid(host){
   }
 
   // Fila de tipo de cambio (cierre) por mes — persiste en months.usd_rate
-  const tcCells = mc.map(m=>{
+  const tcCells = mc.map((m,i)=>{
     const rate = (m.id in PR.tcDirty) ? PR.tcDirty[m.id] : (m.usd_rate!=null?String(m.usd_rate):'');
-    return `<td class="pr-num"><input class="pr-cell pr-tc" inputmode="decimal" autocomplete="off" placeholder="TC"
+    return `<td class="pr-num${mHideClass(i)}"><input class="pr-cell pr-tc" inputmode="decimal" autocomplete="off" placeholder="TC"
       value="${rate?nf0.format(parseNum(rate)):''}"
       onfocus="prTcFocus(this)" onblur="prTcBlur(this)" data-m="${m.id}"></td>`;
   }).join('');
   const tcRow = `<tr class="pr-tcrow"><td class="left pr-sticky"><span class="pr-tclabel">Tipo de cambio (cierre)</span></td>${tcCells}<td class="pr-num pr-sum"></td><td class="pr-num pr-sum"></td><td class="pr-num pr-sum"></td></tr>`;
 
   // Fila de estado (marcar mes en revisión)
-  const revCells = mc.map(m=>{
+  const revCells = mc.map((m,i)=>{
     const rev=(typeof revIsUnderReview==='function')&&revIsUnderReview(m.calendar_year,m.month_number);
-    return `<td class="pr-num ${rev?'rev-col':''}"><button class="pr-revbtn ${rev?'on':''}" title="${rev?'En revisión — clic para cerrar':'Marcar en revisión'}" onclick="revToggle(${m.calendar_year},${m.month_number})"><span class="dot"></span></button></td>`;
+    return `<td class="pr-num ${rev?'rev-col':''}${mHideClass(i)}"><button class="pr-revbtn ${rev?'on':''}" title="${rev?'En revisión — clic para cerrar':'Marcar en revisión'}" onclick="revToggle(${m.calendar_year},${m.month_number})"><span class="dot"></span></button></td>`;
   }).join('');
   const revRow = `<tr class="pr-revrow no-print"><td class="left pr-sticky"><span class="pr-tclabel" style="color:#8a5a00">Estado (revisión)</span></td>${revCells}<td class="pr-num pr-sum"></td><td class="pr-num pr-sum"></td><td class="pr-num pr-sum"></td></tr>`;
 
@@ -433,9 +465,9 @@ function prRenderGrid(host){
         <span style="font-size:11.5px;color:var(--ink-faint)">a la derecha: acumulado, promedio y % s/ventas</span></div>
       <div class="pr-scroll">
         <table class="pr-table">
-          <colgroup><col>${mc.map(m=>{ const rev=(typeof revIsUnderReview==='function')&&revIsUnderReview(m.calendar_year,m.month_number); return `<col class="${rev?'rev-col':''}">`; }).join('')}<col><col><col></colgroup>
+          <colgroup><col>${mc.map((m,i)=>{ const rev=(typeof revIsUnderReview==='function')&&revIsUnderReview(m.calendar_year,m.month_number); return `<col class="${rev?'rev-col':''}${mHideClass(i)}">`; }).join('')}<col><col><col></colgroup>
           <thead><tr><th class="left pr-sticky">Categoría / Subcategoría</th>
-            ${mc.map(m=>{ const rev=(typeof revIsUnderReview==='function')&&revIsUnderReview(m.calendar_year,m.month_number); return `<th class="${rev?'rev-col':''}">${m.month_name.slice(0,3)} ${String(m.calendar_year).slice(2)}${rev?'<br><span class="rev-badge">Rev.</span>':''}</th>`; }).join('')}
+            ${mc.map((m,i)=>{ const rev=(typeof revIsUnderReview==='function')&&revIsUnderReview(m.calendar_year,m.month_number); return `<th class="${rev?'rev-col':''}${mHideClass(i)}">${m.month_name.slice(0,3)} ${String(m.calendar_year).slice(2)}${rev?'<br><span class="rev-badge">Rev.</span>':''}</th>`; }).join('')}
             <th class="pr-sum">Acum.</th><th class="pr-sum">Prom.</th><th class="pr-sum">% s/v</th></tr></thead>
           <tbody>${tcRow}${revRow}${rows}</tbody>
         </table>

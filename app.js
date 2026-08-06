@@ -478,24 +478,43 @@ document.getElementById('modal').addEventListener('click',e=>{ if(e.target.id===
    forzamos al chart a redibujarse en las dimensiones de impresión, lo
    capturamos como PNG y lo insertamos como <img>. Después de imprimir,
    restauramos el canvas. */
+/* Secciones que se imprimen en VERTICAL (portrait). El resto va en
+   horizontal (landscape), que es lo que conviene a las tablas anchas. */
+const PRINT_PORTRAIT = ['capital'];
+
+/* Fija la orientación del PDF inyectando una regla @page, según la sección. */
+function setPrintOrientation(portrait){
+  let st = document.getElementById('print-orient-style');
+  if(!st){
+    st = document.createElement('style');
+    st.id = 'print-orient-style';
+    document.head.appendChild(st);
+  }
+  const size = portrait ? 'A4 portrait' : 'A4 landscape';
+  const margin = portrait ? '10mm' : '7mm';
+  st.textContent = `@media print{ @page{ size:${size}; margin:${margin} } }`;
+}
+
 /* Ajusta la vista activa para que entre en UNA sola página al imprimir/PDF.
-   Mide el alto real del contenido y, si supera el alto útil de una hoja A4
-   apaisada, aplica un transform:scale para comprimirlo. Funciona para todas
-   las secciones sin tener que afinar el CSS de cada una a mano. */
+   Mide alto y ancho reales y aplica transform:scale si hace falta. Tiene en
+   cuenta la orientación (vertical u horizontal) de la sección. */
 function fitActiveViewToOnePage(){
   const view = document.querySelector('.view.active');
   if(!view) return;
-  // Alto y ancho útiles de A4 apaisada (297 x 210mm) menos márgenes de @page.
-  // 1mm ≈ 3.78px. Alto: 210-18=192mm ≈ 725px. Ancho: 297-14=283mm ≈ 1070px.
-  const PAGE_H = 715, PAGE_W = 1060;
+  // ¿Qué sección es? El id es "view-capital", "view-presupuesto", etc.
+  const seccion = (view.id||'').replace('view-','');
+  const portrait = PRINT_PORTRAIT.includes(seccion);
+  setPrintOrientation(portrait);
+  // Dimensiones útiles de A4 (menos márgenes de @page), según orientación.
+  // 1mm ≈ 3.78px. Portrait: 210x297mm. Landscape: 297x210mm.
+  const PAGE_W = portrait ? 715  : 1060;
+  const PAGE_H = portrait ? 1070 : 715;
   // Limpiar cualquier escala previa para medir el tamaño real.
   view.style.transform = 'none';
   view.style.width = '';
   const h = view.scrollHeight;
   // Medir el ancho real del contenido: el scrollWidth de la vista puede quedar
-  // recortado por contenedores con overflow (p. ej. la grilla del Presupuesto,
-  // que tiene scroll horizontal). Tomamos el mayor scrollWidth entre la vista
-  // y sus tablas/áreas con scroll interno.
+  // recortado por contenedores con overflow (p. ej. la grilla del Presupuesto).
   let w = view.scrollWidth;
   view.querySelectorAll('.pr-scroll, table, [style*="overflow"]').forEach(el=>{
     if(el.scrollWidth > w) w = el.scrollWidth;

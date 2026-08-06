@@ -519,11 +519,17 @@ function fitActiveViewToOnePage(){
   view.querySelectorAll('.pr-scroll, table, [style*="overflow"]').forEach(el=>{
     if(el.scrollWidth > w) w = el.scrollWidth;
   });
-  // Factor por alto y por ancho; usamos el más chico (el más restrictivo).
-  const scaleH = h > PAGE_H ? PAGE_H / h : 1;
-  const scaleW = w > PAGE_W ? PAGE_W / w : 1;
-  const scale  = Math.max(0.45, Math.min(scaleH, scaleW));
-  if(scale < 1){
+  // Factor por alto y por ancho. Tomamos el más restrictivo (el menor) para
+  // que el contenido entre completo en la hoja SIN desbordar por ningún lado.
+  // A diferencia de antes, permitimos AMPLIAR (escala > 1) cuando el contenido
+  // es más chico que la hoja, para que ocupe la página completa en vez de
+  // quedar condensado arriba. Un tope evita que se vea desproporcionado.
+  const MAX_UP = 1.9;   // ampliación máxima
+  const scaleH = PAGE_H / h;
+  const scaleW = PAGE_W / w;
+  let scale = Math.min(scaleH, scaleW);
+  scale = Math.max(0.45, Math.min(scale, MAX_UP));   // acotar entre 0.45 y 1.9
+  if(Math.abs(scale - 1) > 0.02){
     view.style.transformOrigin = 'top left';
     view.style.transform = `scale(${scale})`;
     view.style.width = (100/scale) + '%';   // recuperar ancho tras escalar

@@ -485,18 +485,29 @@ document.getElementById('modal').addEventListener('click',e=>{ if(e.target.id===
 function fitActiveViewToOnePage(){
   const view = document.querySelector('.view.active');
   if(!view) return;
-  // Alto útil de A4 apaisada (210mm) menos márgenes de @page (~9mm x2).
-  // 1mm ≈ 3.78px. 210 - 18 = 192mm ≈ 725px. Dejamos un colchón.
-  const PAGE_H = 715;
+  // Alto y ancho útiles de A4 apaisada (297 x 210mm) menos márgenes de @page.
+  // 1mm ≈ 3.78px. Alto: 210-18=192mm ≈ 725px. Ancho: 297-14=283mm ≈ 1070px.
+  const PAGE_H = 715, PAGE_W = 1060;
+  // Limpiar cualquier escala previa para medir el tamaño real.
   view.style.transform = 'none';
+  view.style.width = '';
   const h = view.scrollHeight;
-  if(h > PAGE_H){
-    const scale = Math.max(0.55, PAGE_H / h);   // no bajar de 0.55 (ilegible)
+  // Medir el ancho real del contenido: el scrollWidth de la vista puede quedar
+  // recortado por contenedores con overflow (p. ej. la grilla del Presupuesto,
+  // que tiene scroll horizontal). Tomamos el mayor scrollWidth entre la vista
+  // y sus tablas/áreas con scroll interno.
+  let w = view.scrollWidth;
+  view.querySelectorAll('.pr-scroll, table, [style*="overflow"]').forEach(el=>{
+    if(el.scrollWidth > w) w = el.scrollWidth;
+  });
+  // Factor por alto y por ancho; usamos el más chico (el más restrictivo).
+  const scaleH = h > PAGE_H ? PAGE_H / h : 1;
+  const scaleW = w > PAGE_W ? PAGE_W / w : 1;
+  const scale  = Math.max(0.45, Math.min(scaleH, scaleW));
+  if(scale < 1){
     view.style.transformOrigin = 'top left';
     view.style.transform = `scale(${scale})`;
-    // Al escalar, el contenido ocupa menos ancho; lo estiramos para que
-    // siga usando todo el ancho de la hoja.
-    view.style.width = (100/scale) + '%';
+    view.style.width = (100/scale) + '%';   // recuperar ancho tras escalar
     view.dataset.printScaled = '1';
   } else {
     view.style.transform = '';

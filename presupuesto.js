@@ -421,11 +421,13 @@ function prRenderGrid(host){
         <select onchange="prSetGridFy(this.value)">${fyOptions}</select></div>
       <div class="cp-spacer"></div>
       ${syncBtn}
+      <button class="btn gray sm" onclick="printReport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9V2h12v7M6 18H4v-6h16v6h-2M8 14h8v8H8z"/></svg>PDF</button>
       <button class="btn ${dirtyCount?'':'gray'}" onclick="prSaveGrid()" ${dirtyCount?'':'disabled'}>
         ${dirtyCount?`Guardar cambios (${dirtyCount})`:'Sin cambios'}</button>
     </div>
     ${isCur?'<div class="note no-print"><span>🔗</span><div>Los valores de este ejercicio se toman del <b>Informe de Gestión</b> del mismo período (se sobrescriben al guardar Gestión o al sincronizar). Impuestos a las ganancias quedan fuera y se cargan a mano.</div></div>':''}
     <div class="note no-print"><span>💵</span><div>Cargá el <b>tipo de cambio de cierre</b> de cada mes en la primera fila. Es lo que permite ver el informe en dólares (cada mes se convierte a su propia cotización). Se guarda solo, al salir de la celda.</div></div>
+    <div class="print-head"><span class="logo">D</span><b>DEAM SRL — Presupuesto · Carga mensual</b><span>${(PR.fiscalYears.find(f=>f.id===fyId)||{}).name||''} · ${prIsUsd()?'USD':'ARS'}</span></div>
     <div class="panel">
       <div class="panel-head"><h3>Carga mensual</h3><div class="cp-spacer"></div>
         <span style="font-size:11.5px;color:var(--ink-faint)">a la derecha: acumulado, promedio y % s/ventas</span></div>

@@ -549,10 +549,17 @@ function fitActiveViewToOnePage(){
   // Factor por alto y por ancho; el más restrictivo. Permitimos AMPLIAR para
   // llenar la hoja cuando el contenido es más chico.
   const MAX_UP = 2.2;
+  // Piso de zoom: por debajo de esto la letra queda ilegible. Si el contenido no
+  // entra a este tamaño, se desborda a una 2ª página en vez de seguir achicándose.
+  // Subilo/bajalo para más legibilidad (más alto) o forzar 1 sola página (más bajo).
+  const MIN_ZOOM = 0.62;
   const scaleH = PAGE_H / h;
   const scaleW = PAGE_W / w;
   let scale = Math.min(scaleH, scaleW);
-  scale = Math.max(0.35, Math.min(scale, MAX_UP));
+  // El piso mejora la legibilidad dejando que el contenido se desborde en alto
+  // (2ª página). Pero NUNCA por encima de scaleW: pasarse del ancho cortaría
+  // columnas de la tabla. Por eso el piso se topea contra scaleW.
+  scale = Math.max(Math.min(MIN_ZOOM, scaleW), Math.min(scale, MAX_UP));
   if(Math.abs(scale - 1) > 0.02){
     // Usamos `zoom` en vez de `transform:scale`. zoom SÍ reduce el espacio real
     // que ocupa el contenido (transform no, y por eso dejaba páginas en blanco

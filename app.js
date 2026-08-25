@@ -577,9 +577,9 @@ function printReport(){
   // Dar tiempo a pintar el <img> del gráfico y aplicar el zoom antes del diálogo
   setTimeout(()=>window.print(), 120);
 }
-function prepareChartsForPrint(){
-  if(typeof beChart==='undefined' || !beChart) return;
-  const canvas = beChart.canvas;
+function chartToPrintImg(chart, imgId, alt){
+  if(!chart) return;
+  const canvas = chart.canvas;
   const wrap = canvas && canvas.parentElement;
   if(!wrap) return;
   // Dimensiones de impresión: deben coincidir con @media print en styles.css
@@ -587,26 +587,32 @@ function prepareChartsForPrint(){
   const origH = wrap.style.height, origP = wrap.style.padding;
   wrap.style.height = PRINT_HEIGHT;
   wrap.style.padding = PRINT_PADDING;
-  beChart.resize();
-  const dataUrl = beChart.toBase64Image('image/png', 1.0);
+  chart.resize();
+  const dataUrl = chart.toBase64Image('image/png', 1.0);
   // Restaurar dimensiones de pantalla
   wrap.style.height = origH;
   wrap.style.padding = origP;
-  beChart.resize();
+  chart.resize();
   // Insertar <img> (se muestra sólo en print vía CSS)
-  let img = document.getElementById('beChart-print-img');
+  let img = document.getElementById(imgId);
   if(!img){
     img = document.createElement('img');
-    img.id = 'beChart-print-img';
+    img.id = imgId;
     img.className = 'chart-print-img';
-    img.alt = 'Evolución del Punto de Equilibrio';
+    img.alt = alt;
     wrap.appendChild(img);
   }
   img.src = dataUrl;
 }
+function prepareChartsForPrint(){
+  chartToPrintImg(beChart, 'beChart-print-img', 'Evolución del Punto de Equilibrio');
+  chartToPrintImg(pnChart, 'pnChart-print-img', 'Evolución del Patrimonio Neto');
+}
 function restoreChartsAfterPrint(){
-  const img = document.getElementById('beChart-print-img');
-  if(img) img.remove();
+  ['beChart-print-img','pnChart-print-img'].forEach(id=>{
+    const img = document.getElementById(id);
+    if(img) img.remove();
+  });
   unfitActiveView();
 }
 window.addEventListener('beforeprint', ()=>{ prepareChartsForPrint(); fitActiveViewToOnePage(); });

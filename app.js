@@ -59,7 +59,7 @@ const fechaCorta=iso=>new Date(iso+'T00:00').toLocaleDateString('es-AR',{day:'2-
 let cierresFull=[];   // capital de trabajo, ordenado por fecha asc
 let equilibrio=[];    // periodos de punto de equilibrio
 let capTipo="mensual";
-let beChart=null, editId=null;
+let beChart=null, pnChart=null, editId=null;
 
 /* =====================================================================
    CARGA DE DATOS
@@ -159,6 +159,7 @@ function setView(view){
   document.getElementById('view-'+view).classList.add('active');
   document.getElementById('sb').classList.remove('open');
   if(view==='equilibrio') setTimeout(()=>beChart&&beChart.resize(),60);
+  if(view==='capital') setTimeout(()=>pnChart&&pnChart.resize(),60);
   if(view==='analisis' && typeof renderAnalisis==='function') renderAnalisis();
 }
 window.enter=enter; window.goHome=goHome;
@@ -229,6 +230,24 @@ function renderCapital(){
     const v=ind.calc(c),st=ind.status(v);
     return `<div class="ind"><div class="top"><div><div class="name">${ind.name}</div><div class="formula">${ind.formula}</div></div><span class="status s-${st}">${STAT_TXT[st]}</span></div><div class="big mono">${fmtX(v)}</div><div class="desc">${ind.desc}</div><div class="thresh">${ind.rango}</div><div class="ribbon r-${st}"></div></div>`;
   }).join('');
+  renderPnChart();
+}
+
+function renderPnChart(){
+  if(typeof Chart==='undefined')return;
+  const ctx=document.getElementById('pnChart'); if(!ctx)return;
+  // solo cierres mensuales, ordenados por fecha asc
+  const sorted=cierresFull.filter(c=>c.tipo==='mensual').sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const labels=sorted.map(c=>new Date(c.fecha+'T00:00').toLocaleDateString('es-AR',{month:'short',year:'2-digit'}));
+  const data=sorted.map(c=>Math.round(c.totals.pn));
+  if(pnChart)pnChart.destroy();
+  pnChart=new Chart(ctx,{type:'line',data:{labels,datasets:[
+    {label:'Patrimonio Neto (USD)',data,borderColor:'#714B67',backgroundColor:'rgba(113,75,103,.08)',fill:true,tension:.3,borderWidth:2.5,pointRadius:3,pointBackgroundColor:'#714B67'}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:400},interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top',align:'end',labels:{usePointStyle:true,boxWidth:8,font:{family:'Lato',weight:'700',size:12}}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmtUSD(c.parsed.y)}}},
+      scales:{y:{ticks:{callback:v=>'US$ '+nf0.format(v),font:{family:'Roboto Mono',size:11}},grid:{color:'#f0edf2'}},
+        x:{ticks:{font:{family:'Lato',size:11}},grid:{display:false}}}}});
 }
 
 /* ---------- Carga / edición de cierres (ventana flotante) ---------- */

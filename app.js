@@ -579,10 +579,14 @@ function fitActiveViewToOnePage(){
   const seccion = (view.id||'').replace('view-','');
   const portrait = PRINT_PORTRAIT.includes(seccion);
   setPrintOrientation(portrait);
-  // Área útil de A4 en px CSS (96 dpi) menos los márgenes de @page, dejando un
-  // colchón abajo para que el último bloque no se pase a la página siguiente.
-  const PAGE_W = portrait ? 716  : 1064;
-  const PAGE_H = portrait ? 1030 : 725;
+  // Área útil de A4 en px CSS (96 dpi) menos los márgenes de @page: 716x1047
+  // en vertical, 1070x741 en horizontal. Sobre el alto dejamos ~6% de colchón:
+  // los bloques con break-inside:avoid (paneles, grilla de indicadores) no se
+  // parten, así que pasarse 5px del alto útil no recorta 5px, manda TODO el
+  // bloque a una segunda página. Si el informe todavía se pasa de hoja, bajá
+  // PAGE_H; si sobra mucho blanco abajo, subilo (nunca más de 1040 / 735).
+  const PAGE_W = portrait ? 716 : 1064;
+  const PAGE_H = portrait ? 985 : 700;
   const MIN_ZOOM = 0.62;   // piso de legibilidad: por debajo, se va a 2ª página
   const MAX_UP   = 1.45;   // techo de ampliación
   // Resetear antes de medir: si quedó zoom de una corrida anterior, la

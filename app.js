@@ -542,8 +542,13 @@ function ensurePrintMeasureSheet(){
       if(!media || !/\bprint\b/i.test(media)) return;
       Array.from(rule.cssRules || []).forEach(inner=>{
         if(!inner.selectorText) return;                 // @page y otras at-rules
+        // :where() aporta especificidad CERO, así que el prefijo no altera la
+        // cascada. Con un prefijo normal (html.print-measure) cada regla de
+        // print ganaba una clase de especificidad y pasaba a vencer a reglas de
+        // pantalla que en la impresión real ganan ellas: se medía un layout más
+        // compacto que el que después imprime el navegador.
         const sel = inner.selectorText.split(',')
-          .map(s=> 'html.print-measure ' + s.trim()).join(',');
+          .map(s=> ':where(html.print-measure) ' + s.trim()).join(',');
         out.push(sel + '{' + inner.style.cssText + '}');
       });
     });
@@ -566,7 +571,14 @@ function measurePrintLayout(view, width){
   const h = view.scrollHeight;
   let maxW = width;
   view.querySelectorAll('.pr-scroll, table, [style*="overflow"]').forEach(el=>{
-    if(el.scrollWidth > maxW) maxW = el.scrollWidth;
+    // Ancho real ocupado en la hoja. scrollWidth ignora los transform de los
+    // ancestros (la tabla comparativa de Gestión vive dentro de un wrapper con
+    // scale), así que lo corregimos con la relación entre el rect pintado y el
+    // ancho de layout.
+    const box = el.offsetWidth;
+    const k = box ? (el.getBoundingClientRect().width / box) : 1;
+    const w = el.scrollWidth * (k > 0 ? k : 1);
+    if(w > maxW) maxW = w;
   });
   return { h: h, maxW: maxW };
 }
@@ -586,7 +598,7 @@ function fitActiveViewToOnePage(){
   // bloque a una segunda página. Si el informe todavía se pasa de hoja, bajá
   // PAGE_H; si sobra mucho blanco abajo, subilo (nunca más de 1040 / 735).
   const PAGE_W = portrait ? 716 : 1064;
-  const PAGE_H = portrait ? 985 : 700;
+  const PAGE_H = portrait ? 1000 : 710;
   const MIN_ZOOM = 0.62;   // piso de legibilidad: por debajo, se va a 2ª página
   const MAX_UP   = 1.45;   // techo de ampliación
   // Resetear antes de medir: si quedó zoom de una corrida anterior, la

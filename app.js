@@ -515,66 +515,129 @@ function setPrintOrientation(portrait){
   st.textContent = `@media print{ @page{ size:${size}; margin:${margin} } }`;
 }
 
-/* Ajusta la vista activa para que entre en UNA sola página al imprimir/PDF.
-   Mide alto y ancho reales y aplica transform:scale si hace falta. Tiene en
-   cuenta la orientación (vertical u horizontal) de la sección. */
+/* ---------------------------------------------------------------------
+   Medición en "modo impresión"
+   ---------------------------------------------------------------------
+   El zoom del PDF se calculaba midiendo el informe TAL COMO SE VE EN
+   PANTALLA (fuente 13px, gráfico de 330px, sidebar visible, ancho del
+   monitor) y comparándolo contra una hoja A4. Como en pantalla el contenido
+   es mucho más ancho que una hoja, el factor de ANCHO mandaba siempre
+   (p. ej. 715/1200 ≈ 0,60) y el informe salía impreso al 60%: letra diminuta,
+   todo comprimido en la parte de arriba y media hoja en blanco abajo.
+   Solución: clonamos las reglas de @media print en una hoja que se activa con
+   la clase html.print-measure. Con esa clase podemos medir en pantalla —sin
+   llegar a pintar nada— el layout REAL de impresión (fuentes chicas, sidebar
+   oculta, gráfico de 170px) y al ancho exacto de la hoja. Con esa medida el
+   zoom sale correcto y el contenido ocupa toda la página. */
+let printMeasureReady = null;
+function ensurePrintMeasureSheet(){
+  if(printMeasureReady !== null) return printMeasureReady;
+  const out = [];
+  Array.from(document.styleSheets).forEach(sheet=>{
+    let rules = null;
+    try{ rules = sheet.cssRules; }catch(e){ return; }   // hoja de otro dominio
+    if(!rules) return;
+    Array.from(rules).forEach(rule=>{
+      const media = rule.media && rule.media.mediaText;
+      if(!media || !/\bprint\b/i.test(media)) return;
+      Array.from(rule.cssRules || []).forEach(inner=>{
+        if(!inner.selectorText) return;                 // @page y otras at-rules
+        const sel = inner.selectorText.split(',')
+          .map(s=> 'html.print-measure ' + s.trim()).join(',');
+        out.push(sel + '{' + inner.style.cssText + '}');
+      });
+    });
+  });
+  printMeasureReady = out.length > 0;
+  if(printMeasureReady){
+    const st = document.createElement('style');
+    st.id = 'print-measure-style';
+    st.textContent = out.join('\n');
+    document.head.appendChild(st);
+  }
+  return printMeasureReady;
+}
+
+/* Maqueta la vista a `width` px y devuelve el alto total y el ancho del
+   elemento más ancho (tablas que no entran en la hoja). Se llama siempre con
+   la clase html.print-measure puesta. */
+function measurePrintLayout(view, width){
+  view.style.width = Math.round(width) + 'px';
+  const h = view.scrollHeight;
+  let maxW = width;
+  view.querySelectorAll('.pr-scroll, table, [style*="overflow"]').forEach(el=>{
+    if(el.scrollWidth > maxW) maxW = el.scrollWidth;
+  });
+  return { h: h, maxW: maxW };
+}
+
+/* Ajusta la vista activa para que ocupe UNA página completa al imprimir/PDF:
+   la achica si no entra y la AGRANDA si sobra hoja. */
 function fitActiveViewToOnePage(){
   const view = document.querySelector('.view.active');
   if(!view) return;
   const seccion = (view.id||'').replace('view-','');
   const portrait = PRINT_PORTRAIT.includes(seccion);
   setPrintOrientation(portrait);
-  // Dimensiones útiles de A4 (menos márgenes de @page), según orientación.
-  const PAGE_W = portrait ? 715  : 1060;
-  const PAGE_H = portrait ? 1070 : 715;
-  // Limpiar cualquier escala previa para medir el tamaño real. Es CRÍTICO
-  // resetear el zoom acá: si quedó uno de una ejecución anterior, la medición
-  // saldría distorsionada (mediría sobre el contenido ya achicado) y el cálculo
-  // daría scale≈1, con lo que no se aplicaría ningún zoom.
+  // Área útil de A4 en px CSS (96 dpi) menos los márgenes de @page, dejando un
+  // colchón abajo para que el último bloque no se pase a la página siguiente.
+  const PAGE_W = portrait ? 716  : 1064;
+  const PAGE_H = portrait ? 1030 : 725;
+  const MIN_ZOOM = 0.62;   // piso de legibilidad: por debajo, se va a 2ª página
+  const MAX_UP   = 1.45;   // techo de ampliación
+  // Resetear antes de medir: si quedó zoom de una corrida anterior, la
+  // medición saldría distorsionada.
   view.style.zoom = '';
   view.style.transform = 'none';
   view.style.width = '';
-  // Medir como se va a imprimir: ocultamos temporalmente las columnas marcadas
-  // (meses vacíos del Presupuesto) para que el ancho/alto medidos coincidan con
-  // el PDF real. Sin esto, medimos 12 columnas pero imprimimos 6, y el escalado
-  // queda mal (contenido chico y pegado arriba).
+  delete view.dataset.printScaled;
+  // Sin medición confiable no forzamos nada: que el navegador pagine solo.
+  if(!ensurePrintMeasureSheet()) return;
+
+  // Ocultamos las columnas de meses vacíos del Presupuesto para medir lo que
+  // realmente se imprime.
   const hidden = view.querySelectorAll('.pr-mcol-hide');
   hidden.forEach(el=> el.style.display='none');
-  const h = view.scrollHeight;
-  let w = view.scrollWidth;
-  view.querySelectorAll('.pr-scroll, table, [style*="overflow"]').forEach(el=>{
-    if(el.scrollWidth > w) w = el.scrollWidth;
-  });
-  hidden.forEach(el=> el.style.display='');   // restaurar pantalla
-  // Factor por alto y por ancho; el más restrictivo. Permitimos AMPLIAR para
-  // llenar la hoja cuando el contenido es más chico.
-  const MAX_UP = 2.2;
-  // Piso de zoom: por debajo de esto la letra queda ilegible. Si el contenido no
-  // entra a este tamaño, se desborda a una 2ª página en vez de seguir achicándose.
-  // Subilo/bajalo para más legibilidad (más alto) o forzar 1 sola página (más bajo).
-  const MIN_ZOOM = 0.62;
-  const scaleH = PAGE_H / h;
-  const scaleW = PAGE_W / w;
-  let scale = Math.min(scaleH, scaleW);
-  // El piso mejora la legibilidad dejando que el contenido se desborde en alto
-  // (2ª página). Pero NUNCA por encima de scaleW: pasarse del ancho cortaría
-  // columnas de la tabla. Por eso el piso se topea contra scaleW.
-  scale = Math.max(Math.min(MIN_ZOOM, scaleW), Math.min(scale, MAX_UP));
-  if(Math.abs(scale - 1) > 0.02){
-    // Usamos `zoom` en vez de `transform:scale`. zoom SÍ reduce el espacio real
-    // que ocupa el contenido (transform no, y por eso dejaba páginas en blanco
-    // o partía la tabla). El navegador lo aplica de forma nativa al generar el
-    // PDF, sin depender de timing.
-    view.style.zoom = scale;
-    view.dataset.printScaled = '1';
-  } else {
-    view.style.zoom = '';
-    delete view.dataset.printScaled;
+  document.documentElement.classList.add('print-measure');
+  let scale = 1;
+  try{
+    // Punto fijo: al aplicar zoom Z el contenido se maqueta a PAGE_W/Z de
+    // ancho, y ese ancho cambia el alto. Con 3-4 pasadas converge.
+    let capW = MAX_UP;
+    for(let i=0;i<4;i++){
+      const laid = PAGE_W / scale;
+      const m = measurePrintLayout(view, laid);
+      // El ancho sólo limita si hay desborde real (una tabla que no entra).
+      // Si el contenido es fluido —paneles, indicadores— se reacomoda solo y
+      // no debe achicar nada: ese era el error que comprimía el informe.
+      if(m.maxW > laid + 1) capW = Math.min(capW, PAGE_W / m.maxW);
+      let next = Math.min(PAGE_H / m.h, capW);
+      next = Math.max(next, Math.min(MIN_ZOOM, capW));   // piso, topeado por el ancho
+      const done = Math.abs(next - scale) < 0.015;
+      scale = next;
+      if(done) break;
+    }
+    // Verificación final: si el último ancho hizo crecer el alto, corregimos
+    // hacia abajo (nunca hacia arriba).
+    const f = measurePrintLayout(view, PAGE_W / scale);
+    if(f.h * scale > PAGE_H){
+      scale = Math.max(Math.min(MIN_ZOOM, capW), Math.min(scale, PAGE_H / f.h));
+    }
+  } finally {
+    document.documentElement.classList.remove('print-measure');
+    view.style.width = '';
+    hidden.forEach(el=> el.style.display='');   // restaurar pantalla
   }
+  // Activa las reglas de break-inside en @media print.
+  view.dataset.printScaled = '1';
+  // Usamos `zoom` y no `transform:scale`: zoom SÍ reduce el espacio real que
+  // ocupa el contenido al paginar (transform dejaba páginas en blanco).
+  view.style.zoom = (Math.abs(scale - 1) > 0.02) ? scale : '';
 }
 function unfitActiveView(){
   document.querySelectorAll('.view[data-print-scaled]').forEach(view=>{
     view.style.zoom = '';
+    view.style.width = '';
     delete view.dataset.printScaled;
   });
 }

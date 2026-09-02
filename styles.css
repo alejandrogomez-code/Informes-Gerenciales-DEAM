@@ -361,6 +361,12 @@
      salían a 11 / 11,5px mientras el resto iba a 8px. Como el alto de fila lo
      fija la celda más alta, cada fila quedaba ~30% más alta de lo necesario y la
      tabla no entraba en una hoja. Las igualamos al resto. */
+  /* El contenedor de la tabla tiene overflow-x:auto para la pantalla. Al
+     imprimir eso hace dos destrozos: dibuja la barra de scroll horizontal en la
+     hoja (una franja gris con flechas al pie de la tabla) y recorta la última
+     columna si la tabla se pasa un pelo del ancho. En papel no hay scroll
+     posible, así que lo soltamos. */
+  #g-table-wrap{overflow:visible !important}
   .g-comp .g-c-pct{font-size:8px}
   .g-comp .g-c-tax td:first-child{font-size:8.5px}
   /* Escalado adaptativo del wrapper según cantidad de columnas (calculado en JS) */

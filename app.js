@@ -569,18 +569,28 @@ function ensurePrintMeasureSheet(){
 function measurePrintLayout(view, width){
   view.style.width = Math.round(width) + 'px';
   const h = view.scrollHeight;
-  let maxW = width;
+  // Ancho de layout NECESARIO. Ojo: no sirve mirar el ancho ni el borde
+  // derecho de la tabla, porque con width:100% la tabla siempre termina justo
+  // en el borde del contenedor, entre o no entre. Lo que hay que medir es
+  // cuánto SE PASA de su contenedor (las celdas son nowrap, así que la tabla
+  // se estira más allá y se recorta). Si no se pasa, el ancho no limita nada.
+  let need = width;
   view.querySelectorAll('.pr-scroll, table, [style*="overflow"]').forEach(el=>{
-    // Ancho real ocupado en la hoja. scrollWidth ignora los transform de los
-    // ancestros (la tabla comparativa de Gestión vive dentro de un wrapper con
-    // scale), así que lo corregimos con la relación entre el rect pintado y el
-    // ancho de layout.
-    const box = el.offsetWidth;
-    const k = box ? (el.getBoundingClientRect().width / box) : 1;
-    const w = el.scrollWidth * (k > 0 ? k : 1);
-    if(w > maxW) maxW = w;
+    const cont = el.parentElement;
+    if(cont){
+      const cs = getComputedStyle(cont);
+      const bordeDer = cont.getBoundingClientRect().right
+                     - (parseFloat(cs.paddingRight) || 0)
+                     - (parseFloat(cs.borderRightWidth) || 0);
+      const sobra = el.getBoundingClientRect().right - bordeDer;
+      if(sobra > 1) need = Math.max(need, width + sobra);
+    }
+    // Contenedores que recortan su propio contenido.
+    if(el.scrollWidth > el.clientWidth + 1){
+      need = Math.max(need, width + (el.scrollWidth - el.clientWidth));
+    }
   });
-  return { h: h, maxW: maxW };
+  return { h: h, maxW: need };
 }
 
 /* Ajusta la vista activa para que ocupe UNA página completa al imprimir/PDF:
@@ -597,7 +607,7 @@ function fitActiveViewToOnePage(){
   // parten, así que pasarse 5px del alto útil no recorta 5px, manda TODO el
   // bloque a una segunda página. Si el informe todavía se pasa de hoja, bajá
   // PAGE_H; si sobra mucho blanco abajo, subilo (nunca más de 1040 / 735).
-  const PAGE_W = portrait ? 706 : 1048;
+  const PAGE_W = portrait ? 700 : 1045;
   const PAGE_H = portrait ? 965 : 690;
   const MIN_ZOOM = 0.62;   // piso de legibilidad: por debajo, se va a 2ª página
   const MAX_UP   = 1.45;   // techo de ampliación
@@ -633,39 +643,13 @@ function fitActiveViewToOnePage(){
       scale = next;
       if(done) break;
     }
-    // Verificación final CON el zoom puesto. Medir en escala 1 y multiplicar
-    // subestima: al aplicar zoom el navegador redondea el tamaño de cada
-    // elemento y sobre 30+ filas eso suma un 4-6% de alto extra. Con el zoom
-    // aplicado, getBoundingClientRect() devuelve el alto real que va a ocupar
-    // en la hoja, redondeos incluidos. Dos pasadas para converger.
-    let f = measurePrintLayout(view, PAGE_W / scale);
-    if(f.h * scale > PAGE_H){
-      scale = Math.max(Math.min(MIN_ZOOM, capW), Math.min(scale, PAGE_H / f.h));
-      f = measurePrintLayout(view, PAGE_W / scale);
-    }
-    for(let i=0;i<3;i++){
-      view.style.zoom = scale;
-      const rectH = view.getBoundingClientRect().height;
-      // Ancho real de la tabla más ancha. El rect de la <table> sí refleja el
-      // desborde (la tabla se estira más allá de su contenedor cuando las
-      // celdas son nowrap), a diferencia del rect del wrapper, que viene
-      // recortado. Si esto se pasa del ancho útil, se come la última columna.
-      let rectW = 0;
-      view.querySelectorAll('table').forEach(el=>{
-        const w = el.getBoundingClientRect().width;
-        if(w > rectW) rectW = w;
-      });
-      view.style.zoom = '';
-      // Si el navegador no refleja el zoom en el rect, el cociente da ~1 y no
-      // podemos confiar en la medición: la descartamos y seguimos con la de
-      // escala 1 (más conservadora que arriesgar un recorte).
-      const refleja = rectH > f.h * scale * 0.8 && rectH < f.h * scale * 1.2;
-      if(!refleja) break;
-      const exceso = Math.max(rectH / PAGE_H, rectW / PAGE_W);
-      if(exceso <= 1) break;
-      scale = Math.max(Math.min(MIN_ZOOM, capW), scale / exceso);
-      f = measurePrintLayout(view, PAGE_W / scale);
-    }
+    // Verificación final en escala 1. Antes esto se hacía aplicando el zoom y
+    // leyendo getBoundingClientRect(), pero el navegador NO refleja el zoom del
+    // propio elemento en ese rect: devolvía la medida sin escalar, la
+    // comparación daba siempre "entra" y la corrección nunca se aplicaba.
+    const f = measurePrintLayout(view, PAGE_W / scale);
+    const tope = Math.min(PAGE_H / f.h, PAGE_W / f.maxW);
+    if(tope < scale) scale = Math.max(Math.min(MIN_ZOOM, capW), tope);
   } finally {
     document.documentElement.classList.remove('print-measure');
     view.style.width = '';

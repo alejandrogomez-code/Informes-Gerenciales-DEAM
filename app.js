@@ -598,7 +598,7 @@ function fitActiveViewToOnePage(){
   // bloque a una segunda página. Si el informe todavía se pasa de hoja, bajá
   // PAGE_H; si sobra mucho blanco abajo, subilo (nunca más de 1040 / 735).
   const PAGE_W = portrait ? 716 : 1064;
-  const PAGE_H = portrait ? 1000 : 710;
+  const PAGE_H = portrait ? 965 : 690;
   const MIN_ZOOM = 0.62;   // piso de legibilidad: por debajo, se va a 2ª página
   const MAX_UP   = 1.45;   // techo de ampliación
   // Resetear antes de medir: si quedó zoom de una corrida anterior, la
@@ -633,11 +633,27 @@ function fitActiveViewToOnePage(){
       scale = next;
       if(done) break;
     }
-    // Verificación final: si el último ancho hizo crecer el alto, corregimos
-    // hacia abajo (nunca hacia arriba).
-    const f = measurePrintLayout(view, PAGE_W / scale);
+    // Verificación final CON el zoom puesto. Medir en escala 1 y multiplicar
+    // subestima: al aplicar zoom el navegador redondea el tamaño de cada
+    // elemento y sobre 30+ filas eso suma un 4-6% de alto extra. Con el zoom
+    // aplicado, getBoundingClientRect() devuelve el alto real que va a ocupar
+    // en la hoja, redondeos incluidos. Dos pasadas para converger.
+    let f = measurePrintLayout(view, PAGE_W / scale);
     if(f.h * scale > PAGE_H){
       scale = Math.max(Math.min(MIN_ZOOM, capW), Math.min(scale, PAGE_H / f.h));
+      f = measurePrintLayout(view, PAGE_W / scale);
+    }
+    for(let i=0;i<2;i++){
+      view.style.zoom = scale;
+      const rectH = view.getBoundingClientRect().height;
+      view.style.zoom = '';
+      // Si el navegador no refleja el zoom en el rect, el cociente da ~1 y no
+      // podemos confiar en la medición: la descartamos y seguimos con la de
+      // escala 1 (más conservadora que arriesgar un recorte).
+      const refleja = rectH > f.h * scale * 0.8 && rectH < f.h * scale * 1.2;
+      if(!refleja || rectH <= PAGE_H) break;
+      scale = Math.max(Math.min(MIN_ZOOM, capW), scale * PAGE_H / rectH);
+      f = measurePrintLayout(view, PAGE_W / scale);
     }
   } finally {
     document.documentElement.classList.remove('print-measure');

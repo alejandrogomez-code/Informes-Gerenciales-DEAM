@@ -356,6 +356,13 @@
   .g-comp tbody td{font-size:8px}
   .g-comp tbody td:first-child{font-size:8.5px;min-width:0}
   .g-comp thead th{font-size:7px;letter-spacing:.15px;padding:2px 4px}
+  /* Estas dos reglas de pantalla tienen más especificidad que .g-comp tbody td,
+     así que se colaban en la impresión: las columnas % y las filas de impuestos
+     salían a 11 / 11,5px mientras el resto iba a 8px. Como el alto de fila lo
+     fija la celda más alta, cada fila quedaba ~30% más alta de lo necesario y la
+     tabla no entraba en una hoja. Las igualamos al resto. */
+  .g-comp .g-c-pct{font-size:8px}
+  .g-comp .g-c-tax td:first-child{font-size:8.5px}
   /* Escalado adaptativo del wrapper según cantidad de columnas (calculado en JS) */
   #g-table-wrap.g-scale-95{transform:scale(.95);transform-origin:top left;width:105.3%}
   #g-table-wrap.g-scale-92{transform:scale(.92);transform-origin:top left;width:108.7%}

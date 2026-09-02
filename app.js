@@ -597,7 +597,7 @@ function fitActiveViewToOnePage(){
   // parten, así que pasarse 5px del alto útil no recorta 5px, manda TODO el
   // bloque a una segunda página. Si el informe todavía se pasa de hoja, bajá
   // PAGE_H; si sobra mucho blanco abajo, subilo (nunca más de 1040 / 735).
-  const PAGE_W = portrait ? 716 : 1064;
+  const PAGE_W = portrait ? 706 : 1048;
   const PAGE_H = portrait ? 965 : 690;
   const MIN_ZOOM = 0.62;   // piso de legibilidad: por debajo, se va a 2ª página
   const MAX_UP   = 1.45;   // techo de ampliación
@@ -643,16 +643,27 @@ function fitActiveViewToOnePage(){
       scale = Math.max(Math.min(MIN_ZOOM, capW), Math.min(scale, PAGE_H / f.h));
       f = measurePrintLayout(view, PAGE_W / scale);
     }
-    for(let i=0;i<2;i++){
+    for(let i=0;i<3;i++){
       view.style.zoom = scale;
       const rectH = view.getBoundingClientRect().height;
+      // Ancho real de la tabla más ancha. El rect de la <table> sí refleja el
+      // desborde (la tabla se estira más allá de su contenedor cuando las
+      // celdas son nowrap), a diferencia del rect del wrapper, que viene
+      // recortado. Si esto se pasa del ancho útil, se come la última columna.
+      let rectW = 0;
+      view.querySelectorAll('table').forEach(el=>{
+        const w = el.getBoundingClientRect().width;
+        if(w > rectW) rectW = w;
+      });
       view.style.zoom = '';
       // Si el navegador no refleja el zoom en el rect, el cociente da ~1 y no
       // podemos confiar en la medición: la descartamos y seguimos con la de
       // escala 1 (más conservadora que arriesgar un recorte).
       const refleja = rectH > f.h * scale * 0.8 && rectH < f.h * scale * 1.2;
-      if(!refleja || rectH <= PAGE_H) break;
-      scale = Math.max(Math.min(MIN_ZOOM, capW), scale * PAGE_H / rectH);
+      if(!refleja) break;
+      const exceso = Math.max(rectH / PAGE_H, rectW / PAGE_W);
+      if(exceso <= 1) break;
+      scale = Math.max(Math.min(MIN_ZOOM, capW), scale / exceso);
       f = measurePrintLayout(view, PAGE_W / scale);
     }
   } finally {
